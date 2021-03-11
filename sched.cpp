@@ -62,16 +62,19 @@ struct event{
 class events {
     public:
         events ();
-        ~events ();
-        void get_event(){
+        //~events ();
+        void getEvent(){
 
         }
 
-        void put_event(){
+        void putEvent(){
 
         }
 
-        void rm_event(){
+        void rmEvent(){
+
+        }
+        void printEvents(){
 
         }
 
@@ -79,28 +82,24 @@ class events {
         event head; //Dummy head of linked list of evts
 };
 
-
 class Scheduler {
     public:
     private:
 };
 
-
 //Globals
-int process::count = 0; //Init the static count for PID
-int event::count = 0; //Init the static count for evt id
-
 vector<int> randvals; //Vector containg random integers
 int rsize; //Total random integer count
 int quantum; //RR
 
-vector<process*> procList; //Vector holding all created procs
-events evtList;
-
 //Functions
 int myrandom(int);
 void printProcList(const vector<process*>&);
+void deleteProcList(const vector<process*>&);
+void Simulation(events*);
 
+int process::count = 0; //Init the static count for PID
+int event::count = 0; //Init the static count for evt id
 
 int main(int argc, char* argv[]) {
     //Opening random value file
@@ -125,12 +124,20 @@ int main(int argc, char* argv[]) {
     process* p;
     event* evt;
     int at, tc, cb, io;
+    vector<process*> procList; //Vector holding all created procs
+    events evtList; //Linked list holding all events
+
     while (ifile >> at >> tc >> cb >> io) {
         p = new process(at,tc,cb,io,STATE_CREATED);
+        evt = new event(p, at, TRANS_TO_PREEMPT);
         procList.push_back(p);
+        //evtList.add(evt)
     }
-    ifile.close();
-    printProcList(procList);
+    ifile.close(); //Closing file
+    printProcList(procList); //Check for errors
+    //evtList.printEvents();
+    Simulation(&evtList);
+    deleteProcList(procList); //Deleting allocated memory
 }
 
 //The random function
@@ -150,7 +157,53 @@ void printProcList(const vector<process*>& v){
     }
 }
 
+//Deleting every allocated procs
+void deleteProcList(const vector<process*>& v){
+    for (int i=0; i<v.size(); i++){
+        delete(v[i]);
+    }
+}
 
+/*
+void Simulation() {
+EVENT* evt;
+while( (evt = get_event()) ) {
+Process *proc = evt->evtProcess;    // this is the process the event works on
+CURRENT_TIME = evt->evtTimeStamp;
+timeInPrevState = CURRENT_TIME – proc->state_ts;
+switch(evt->transition) {  // which state to transition to?
+case TRANS_TO_READY:
+// must come from BLOCKED or from PREEMPTION
+// must add to run queue
+CALL_SCHEDULER = true; // conditional on whether something is run
+break;
+case TRANS_TO_RUN:
+// create event for either preemption or blocking
+break;
+case TRANS_TO_BLOCK:
+//create an event for when process becomes READY again
+CALL_SCHEDULER = true;
+break;
+case TRANS_TO_PREEMPT:
+// add to runqueue (no event is generated)
+CALL_SCHEDULER = true;
+break;
+}
+// remove current event object from Memory
+delete evt; evt = nullptr;
+if(CALL_SCHEDULER) {
+if (get_next_event_time() == CURRENT_TIME)
+continue; //process next event from Event queue
+CALL_SCHEDULER = false; // reset global flag
+if (CURRENT_RUNNING_PROCESS == nullptr) {
+CURRENT_RUNNING_PROCESS = THE_SCHEDULER->get_next_process();
+if (CURRENT_RUNNING_PROCESS == nullptr)
+continue;
+
+}}}}
+ */
+
+// create event to make this process runnable for same time.
 
 /*
 process_state_t x;
