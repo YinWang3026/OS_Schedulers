@@ -43,10 +43,11 @@ struct process{
 
 struct event{
     static int count;
+    event(){ next=NULL; } //Empty constructor
     event(process* p, int ts, process_trans_t t):
         evtProcess(p), evtTimeStamp(ts), transition(t){
         evtid = count++;
-        nextEvt = NULL;
+        next = NULL;
     }
     void printEvent(){
         printf("evtID: %d, PID: %d, ts: %d, trans: %d\n",evtid,evtProcess->pid,evtTimeStamp,
@@ -56,30 +57,59 @@ struct event{
     process* evtProcess;
     int evtTimeStamp;
     process_trans_t transition;
-    event* nextEvt;
+    event* next;
 };
 
-class events {
+class events{
     public:
-        events ();
-        //~events ();
-        void getEvent(){
-
+        events(){
+            head = new event();
         }
-
-        void putEvent(){
-
+        ~events(){
+            delete head;
         }
-
-        void rmEvent(){
-
+        //Return the first evt in list
+        //Dont forget to free the evt
+        event* getEvent(){
+            if (head->next == NULL){
+                return NULL;
+            }
+            event* temp = head->next;
+            head->next = head->next->next;
+            return temp;
+        }
+        //Add to the end of the list
+        void putEvent(event* evt){
+            event* temp = head;
+            while (temp->next != NULL){
+                temp = temp->next;
+            }
+            temp->next = evt;
+        }
+        //Find evt by ID and remove it
+        void rmEvent(event* evt){
+            event* temp = head->next;
+            event* prev = head;
+            while (temp != NULL){
+                if (temp->evtid == evt->evtid){
+                    prev->next = temp->next;
+                    delete temp;
+                    break;
+                }
+                temp = temp->next;
+                prev = prev->next;
+            }
         }
         void printEvents(){
-
+            event* temp = head->next;
+            while (temp != NULL) {
+                temp->printEvent();
+                temp = temp->next;
+            }
         }
 
     private:
-        event head; //Dummy head of linked list of evts
+        event* head; //Dummy head of linked list of evts
 };
 
 class Scheduler {
@@ -118,7 +148,7 @@ int main(int argc, char* argv[]) {
     //Opening process file
     ifstream ifile("../lab2_assign/input0");
     if (!ifile) {
-        cerr << "Could not open the ifile.\n";
+        cerr << "Could not open the input file.\n";
         exit(1);
     }
     process* p;
@@ -131,11 +161,22 @@ int main(int argc, char* argv[]) {
         p = new process(at,tc,cb,io,STATE_CREATED);
         evt = new event(p, at, TRANS_TO_PREEMPT);
         procList.push_back(p);
-        //evtList.add(evt)
+        evtList.putEvent(evt);
     }
     ifile.close(); //Closing file
-    printProcList(procList); //Check for errors
-    //evtList.printEvents();
+
+    /*
+    printProcList(procList); //Print the process list
+    evtList.printEvents(); //Print the event list
+    event* temp; //Checking if getEvent works
+    while ((temp = evtList.getEvent())){ //Get event test
+        temp->printEvent();
+        delete temp;
+    }
+    evtList.rmEvent(evt); //Remove event test
+    evtList.printEvents(); //Print the event list
+    */
+
     Simulation(&evtList);
     deleteProcList(procList); //Deleting allocated memory
 }
@@ -160,10 +201,13 @@ void printProcList(const vector<process*>& v){
 //Deleting every allocated procs
 void deleteProcList(const vector<process*>& v){
     for (int i=0; i<v.size(); i++){
-        delete(v[i]);
+        delete v[i];
     }
 }
 
+void Simulation(events* evtList){
+    return ;
+}
 /*
 void Simulation() {
 EVENT* evt;
