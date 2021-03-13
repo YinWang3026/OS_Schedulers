@@ -29,8 +29,8 @@ enum process_state_t{
     STATE_BLOCKED
 };
 
-string enum_state_string[] = { //Print the state
-    "CREAETD",
+string state_string[] = { //Print the state
+    "CREATED",
     "READY",
     "RUNNING",
     "BLOCKED"
@@ -46,13 +46,16 @@ enum process_trans_t{
 //Struct definitions
 struct process{
     static int count;
-    process(int at, int ct, int cb, int io, process_state_t s):
-        arrivalTime(at), totalCpuTime(ct), cpuBurst(cb), ioBurst(io), state(s){
+    process(int at, int ct, int cb, int io, int p, process_state_t s):
+        arrivalTime(at), totalCpuTime(ct), cpuBurst(cb), ioBurst(io),  
+        state(s), remain_cputime(ct), static_priority(p), state_ts(at){
             pid = count++;
+            dynamic_priority = static_priority - 1;
         }
     void printProcess(){
-        printf("PID: %d, AT: %d, TC: %d, CB: %d, IO: %d\n",pid,arrivalTime,totalCpuTime,
-        cpuBurst,ioBurst);
+        printf("PID: %d, AT: %d, TC: %d, CB: %d, IO: %d, State: %s, rem: %d, sPri: %d, dPri: %d, ts: %d\n",
+        pid,arrivalTime,totalCpuTime,cpuBurst,ioBurst,state_string[state].c_str(),remain_cputime,
+        static_priority,dynamic_priority,state_ts);
     }
     int pid; //process id
     int arrivalTime;
@@ -60,11 +63,10 @@ struct process{
     int cpuBurst;
     int ioBurst;
     process_state_t state; //current state
-    //To be modified
-    int remain_cputime;
-    int static_priority;
+    int remain_cputime; //total cpu subtract what is done
+    int static_priority; //myRandom
     int dynamic_priority; //static prio - 1
-    int state_ts; 
+    int state_ts; //time that proc put into this state
 };
 
 struct event{
@@ -80,8 +82,8 @@ struct event{
         transition);
     }
     void eTraceEvent(){
-        cout << evtTimeStamp << ":" << evtProcess->pid << ":" << enum_state_string[evtProcess->state] << " ";
-        //etrace("%d:%d:%s ",evtTimeStamp,evtProcess->pid,enum_state_string[evtProcess->state].c_str());
+        cout << evtTimeStamp << ":" << evtProcess->pid << ":" << state_string[evtProcess->state] << " ";
+        //etrace("%d:%d:%s ",evtTimeStamp,evtProcess->pid,state_string[evtProcess->state].c_str());
     }
     int evtid; //An id
     process* evtProcess; //The proc associated with this event
@@ -100,6 +102,7 @@ class Events{
             head = new event();
         }
         ~Events(){
+            //Should be empty by the end of simulation, so just get rid of head
             delete head;
         }
         //Return the first evt in list
@@ -155,47 +158,104 @@ class Events{
 class Scheduler {
     public:
         Scheduler(){}
-        virtual void add_process(process* p){
-            
-        }
-        virtual process* get_next_process(){
-            
-        }
-        virtual void test_preempty(process *p, int curtime){
-            
-        }
+        virtual ~Scheduler(){}
+        virtual void add_process(process*)=0;
+        virtual process* get_next_process()=0;
+        virtual void test_preempty(process*, int)=0;
     private:
-
-        //Run queue how i do this
 };
 
 class FCFS : public Scheduler{
     public:
+        FCFS(){}
+        void add_process(process* p){
+
+        }
+        process* get_next_process(){
+
+        }
+        void test_preempty(process *p, int curtime){
+            cerr << "FCFS Does not implement test_preempty.\n";
+            exit(1);
+        }
     private:
 };
 
 class LCFS : public Scheduler{
     public:
+        LCFS(){}
+        void add_process(process* p){
+
+        }
+        process* get_next_process(){
+
+        }
+        void test_preempty(process *p, int curtime){
+            cerr << "LCFS Does not implement test_preempty.\n";
+            exit(1);
+        }
     private:
 };
 
 class SRTF : public Scheduler{
     public:
+        SRTF(){}
+        void add_process(process* p){
+
+        }
+        process* get_next_process(){
+
+        }
+        void test_preempty(process *p, int curtime){
+            cerr << "SRTF Does not implement test_preempty.\n";
+            exit(1);
+        }
     private:
 };
 
 class RR : public Scheduler{
     public:
+        RR(){}
+        void add_process(process* p){
+
+        }
+        process* get_next_process(){
+
+        }
+        void test_preempty(process *p, int curtime){
+            cerr << "RR Does not implement test_preempty.\n";
+            exit(1);
+        }
     private:
 };
 
 class PRIO : public Scheduler{
     public:
+        PRIO(){}
+        void add_process(process* p){
+
+        }
+        process* get_next_process(){
+
+        }
+        void test_preempty(process *p, int curtime){
+            cerr << "FCFS Does not implement test_preempty.\n";
+            exit(1);
+        }
     private:
 };
 
 class PREPRIO : public Scheduler{
     public:
+        PREPRIO(){}
+        void add_process(process* p){
+
+        }
+        process* get_next_process(){
+            
+        }
+        void test_preempty(process *p, int curtime){
+        }
     private:
 };
 
@@ -203,15 +263,14 @@ class PREPRIO : public Scheduler{
 void printProcList(vector<process*>&);
 void deleteProcList(vector<process*>&);
 int myrandom(int); //Generates a random number
-void simulation(Events&, Scheduler&);
-
+void simulation(Events*, Scheduler*);
 
 int main(int argc, char* argv[]) {
     int c;
     int maxPrio = 4; //PRIO, PREPRIO, default = 4
     int quantum = 10000; //RR, PRIO, PREPRIO, default = 100000
     char sched; //Scheduler type
-    Scheduler myScheduler; //Scheduler for the simulator
+    Scheduler* myScheduler; //Scheduler for the simulator
     while ((c = getopt(argc,argv,"vtes:")) != -1 )
     {
         switch(c) {
@@ -226,8 +285,30 @@ int main(int argc, char* argv[]) {
             break;
         case 's':
             sscanf(optarg, "%c%d:%d",&sched,&quantum,&maxPrio);
+            switch(sched) {
+                case 'F': //FCFS
+                    myScheduler = new FCFS();
+                    break;
+                case 'L': //LCFS
+                    myScheduler = new LCFS();
+                    break;
+                case 'S': //SRTF
+                    myScheduler = new SRTF();
+                    break;
+                case 'R': //Round Robin
+                    myScheduler = new RR();
+                    break;
+                case 'P': //Priority
+                    myScheduler = new PRIO();
+                    break;
+                case 'E': //Preempt Priority
+                    myScheduler = new PREPRIO();
+                    break;
+                default:
+                    cerr << "Invalid scheduler.\n";
+                    exit(1);                   
+            }
             break;
-            ///ARGUEMNT CHECKING
         }
     }
     vtrace("vflag = %d  tflag = %d eflag = %d\n",vFlag,tFlag,eFlag);
@@ -262,37 +343,40 @@ int main(int argc, char* argv[]) {
     }
     process* p;
     event* evt;
-    int at, tc, cb, io;
+    int at, tc, cb, io, prio;
     vector<process*> procList; //Vector holding all created procs
-    Events evtList; //Linked list holding all events
+    Events* evtList = new Events(); //Linked list holding all events
 
     while (ifile >> at >> tc >> cb >> io) {
-        p = new process(at,tc,cb,io,STATE_CREATED);
+        prio = myrandom(maxPrio);
+        p = new process(at,tc,cb,io, prio, STATE_CREATED);
         evt = new event(p, at, TRANS_TO_READY);
-        //MAX_PRIO????????????????????
         procList.push_back(p);
-        evtList.putEvent(evt);
+        evtList->putEvent(evt);
     }
     ifile.close(); //Closing file
 
     printProcList(procList); //Print the process list
-    evtList.printEvents(); //Print the event list
+    evtList->printEvents(); //Print the event list
     event* temp; //Checking if getEvent works
-    while ((temp = evtList.getEvent())){ //Get event test
+    while ((temp = evtList->getEvent())){ //Get event test
         temp->printEvent();
         delete temp;
     }
-    evtList.rmEvent(evt); //Remove event test
-    evtList.printEvents(); //Print the event list
+    evtList->rmEvent(evt); //Remove event test
+    evtList->printEvents(); //Print the event list
     
     simulation(evtList, myScheduler);
-    deleteProcList(procList); //Deleting allocated memory
+    //Clean up
+    deleteProcList(procList); //Deleting allocated procs
+    delete myScheduler; //Deleting scheduler
+    delete evtList; //Deleting evts
 }
 
 //The random function
 int myrandom(int burst) {
     static int ofs = -1;
-    ofs ++;
+    ofs++;
     if (ofs >= rsize) {
         ofs = 0;
     }
@@ -313,12 +397,12 @@ void deleteProcList(vector<process*>& v){
     }
 }
 
-void simulation(Events& evtList, Scheduler& myScheduler){
+void simulation(Events* evtList, Scheduler* myScheduler){
     event* evt;
     process* proc;
     process_trans_t evtTrans;
     int currentTime, timeInPrevState;
-    while((evt = evtList.getEvent())) {
+    while((evt = evtList->getEvent())) {
         //Get the details
         proc = evt->evtProcess;
         evtTrans = evt->transition;
