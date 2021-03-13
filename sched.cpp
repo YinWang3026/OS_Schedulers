@@ -71,7 +71,7 @@ struct process{
 
 struct event{
     static int count;
-    event(){ next=NULL; } //Empty constructor
+    event(){ next=NULL; } //Constructor for dummy head
     event(process* p, int ts, process_trans_t t):
         evtProcess(p), evtTimeStamp(ts), transition(t){
         evtid = count++;
@@ -157,12 +157,14 @@ class Events{
 
 class Scheduler {
     public:
-        Scheduler(){}
+        Scheduler(int q, int p) : quantum(q), maxprio(p) {}
         virtual ~Scheduler(){}
         virtual void add_process(process*)=0;
         virtual process* get_next_process()=0;
         virtual void test_preempty(process*, int)=0;
     private:
+        int quantum;
+        int maxprio;
 };
 
 class FCFS : public Scheduler{
@@ -285,6 +287,15 @@ int main(int argc, char* argv[]) {
             break;
         case 's':
             sscanf(optarg, "%c%d:%d",&sched,&quantum,&maxPrio);
+            if (quantum < 0){
+                cerr << "Invalid quantum, less than 0, using default quantum = 10000.\n";
+                quantum = 10000;
+            }
+            if (maxPrio < 0){
+                cerr << "Invalid maxprio, less than 0, using default maxprio = 4.\n";
+                maxPrio = 4;
+            }
+            
             switch(sched) {
                 case 'F': //FCFS
                     myScheduler = new FCFS();
@@ -305,7 +316,7 @@ int main(int argc, char* argv[]) {
                     myScheduler = new PREPRIO();
                     break;
                 default:
-                    cerr << "Invalid scheduler.\n";
+                    cerr << "Invalid scheduler input.\n";
                     exit(1);                   
             }
             break;
