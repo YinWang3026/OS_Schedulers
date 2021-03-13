@@ -293,19 +293,13 @@ class PREPRIO : public Scheduler{
 */
 
 //Globals
-vector<int> randvals; //Vector containg random integers
+vector<int> randvals; //Vector containg the random integers
 
 //Function prototypes
 void printProcList(vector<process*>&);
 void deleteProcList(vector<process*>&);
 int myrandom(int); //Generates a random number
 void simulation(Events*, Scheduler*);
-typedef int (* FuncSig)(int);
-FuncSig prepMyRandom(char*);
-
-FuncSig prepMyRandom(char*){
-    
-}
 
 int main(int argc, char* argv[]) {
     int c;
@@ -384,11 +378,11 @@ int main(int argc, char* argv[]) {
 
     //Gettng file names
     char* inputFile = argv[optind];
-    char* rFile = argv[optind+1];
-    vtrace("Input file: %s, rfile: %s\n",inputFile,rFile);
+    char* randomFile = argv[optind+1];
+    vtrace("Input file: %s, rfile: %s\n",inputFile,randomFile);
     
     //Opening random value file
-    ifstream rfile(rFile);
+    ifstream rfile(randomFile);
     if (!rfile) {
         cerr << "Could not open the rfile.\n";
         exit(1);
