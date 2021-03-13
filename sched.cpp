@@ -92,6 +92,16 @@ struct event{
 int process::count = 0; //Init the static count for pid
 int event::count = 0; //Init the static count for evtid
 
+//Linked list for processes
+template <typename T>
+struct Node {
+    Node(T* p, Node* n = NULL) : obj(p), next(n) {}
+    T* obj;
+    Node* next;
+};
+
+class
+
 //Class definitions
 class Events{
     public:
@@ -151,13 +161,6 @@ class Events{
         //Time stamp increases down the list
 };
 
-//Linked list for processes
-struct procNode {
-    procNode(process* p, procNode* n = NULL) : proc(p), next(n) {}
-    process* proc;
-    procNode* next;
-};
-
 class Scheduler {
     public:
         Scheduler(int q, int p) : quantum(q), maxprio(p){}
@@ -201,15 +204,23 @@ class FCFS : public Scheduler{
             delete head;
         }
         void add_process(process* p){
+            //Adds to end of queue
             return;
         }
         process* get_next_process(){
+            //Returns the proc at the front of queue
+            if (head->next == NULL) {
+                return NULL;
+            }
+            procNode* procTemp = head->next;
+            head->next = head->next->next;
             return NULL;
         }
         string getSchedName(){
             return "FCFS";
         }
     private:
+        //Proc queue
         procNode* head;
 };
 /*
@@ -426,6 +437,29 @@ int main(int argc, char* argv[]) {
     delete evtList; //Deleting evts
 }
 
+//The random function
+int myrandom(int burst) {
+    static int ofs = 0;
+    if (ofs >= randvals.size()) {
+        ofs = 0;
+    }
+    return 1 + (randvals[ofs++] % burst);
+}
+
+//Prints the vector of procs
+void printProcList(vector<process*>& v){
+    for (int i=0; i<v.size(); i++){
+        v[i]->printProcess();
+    }
+}
+
+//Deleting every allocated procs
+void deleteProcList(vector<process*>& v){
+    for (int i=0; i<v.size(); i++){
+        delete v[i];
+    }
+}
+
 void simulation(Events* evtList, Scheduler* myScheduler){
     event* evt;
     process* proc;
@@ -473,25 +507,3 @@ void simulation(Events* evtList, Scheduler* myScheduler){
     }
 }
 
-//The random function
-int myrandom(int burst) {
-    static int ofs = 0;
-    if (ofs >= randvals.size()) {
-        ofs = 0;
-    }
-    return 1 + (randvals[ofs++] % burst);
-}
-
-//Prints the vector of procs
-void printProcList(vector<process*>& v){
-    for (int i=0; i<v.size(); i++){
-        v[i]->printProcess();
-    }
-}
-
-//Deleting every allocated procs
-void deleteProcList(vector<process*>& v){
-    for (int i=0; i<v.size(); i++){
-        delete v[i];
-    }
-}
