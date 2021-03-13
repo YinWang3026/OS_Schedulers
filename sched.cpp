@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <getopt.h> //Arg parsing
 #include <stdlib.h>
+#include <deque>
 
 using namespace std;
 
@@ -79,8 +80,7 @@ struct event{
         transition);
     }
     void eTraceEvent(){
-        cout << evtTimeStamp << ":" << evtProcess->pid << ":" << state_string[evtProcess->state] << " ";
-        //etrace("%d:%d:%s ",evtTimeStamp,evtProcess->pid,state_string[evtProcess->state].c_str());
+        etrace("%d:%d:%s ",evtTimeStamp,evtProcess->pid,state_string[evtProcess->state].c_str());
     }
     int evtid; //An id
     process* evtProcess; //The proc associated with this event
@@ -91,16 +91,6 @@ struct event{
 
 int process::count = 0; //Init the static count for pid
 int event::count = 0; //Init the static count for evtid
-
-//Linked list for processes
-template <typename T>
-struct Node {
-    Node(T* p, Node* n = NULL) : obj(p), next(n) {}
-    T* obj;
-    Node* next;
-};
-
-class
 
 //Class definitions
 class Events{
@@ -134,6 +124,13 @@ class Events{
             }
             prevEvt->next = evt;
         }
+        //Get the next event time
+        int getNextEventTime(){
+            if (head->next == NULL){
+                return -1;
+            }
+            return head->next->evtTimeStamp;
+        }
         //Find evt by ID and remove it
         void rmEvent(event* evt){
             event* temp = head->next;
@@ -151,9 +148,10 @@ class Events{
         void printEvents(){
             event* temp = head->next;
             while (temp != NULL) {
-                temp->printEvent();
-                temp = temp->next;
-            }  
+                temp->eTraceEvent();
+                temp=temp->next;
+            }
+            etrace("\n");
         }
 
     private:
@@ -198,30 +196,26 @@ class Scheduler {
 class FCFS : public Scheduler{
     public:
         FCFS(int q, int p) : Scheduler(q, p) {
-            head = new procNode(NULL);
         }
         ~FCFS(){
-            delete head;
         }
         void add_process(process* p){
             //Adds to end of queue
-            return;
+            runqueue.push_back(p);
         }
         process* get_next_process(){
             //Returns the proc at the front of queue
-            if (head->next == NULL) {
-                return NULL;
-            }
-            procNode* procTemp = head->next;
-            head->next = head->next->next;
-            return NULL;
+            //and delete it from queue
+            process* res = runqueue.front();
+            runqueue.pop_front();
+            return res;
         }
         string getSchedName(){
             return "FCFS";
         }
     private:
         //Proc queue
-        procNode* head;
+        deque<process*> runqueue;
 };
 /*
 class LCFS : public Scheduler{
@@ -303,9 +297,8 @@ class PREPRIO : public Scheduler{
 };
 */
 
-//Globals
+//Global var
 vector<int> randvals; //Vector containg the random integers
-
 //Function prototypes
 void printProcList(vector<process*>&);
 void deleteProcList(vector<process*>&);
