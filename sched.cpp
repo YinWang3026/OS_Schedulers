@@ -8,13 +8,10 @@
 
 using namespace std;
 
-//Globals
+//Flags
 int vFlag = 0;
 int tFlag = 0;
 int eFlag = 0;
-
-vector<int> randvals; //Vector containg random integers
-int rsize; //Total random integer count
 
 //Macro definitions
 #define vtrace(fmt...)  do { if (vFlag) { printf(fmt); fflush(stdout); } } while(0)
@@ -105,8 +102,7 @@ class Events{
             //Should be empty by the end of simulation, so just get rid of head
             delete head;
         }
-        //Return the first evt in list
-        //Dont forget to free the evt
+        //Return/pops the first evt based on timestamp, and dont forget to delete the evt
         event* getEvent(){
             if (head->next == NULL){
                 return NULL;
@@ -115,7 +111,7 @@ class Events{
             head->next = head->next->next;
             return temp;
         }
-        //Add to the end of the list based on its timestamp
+        //Add to the list based on its timestamp
         void putEvent(event* evt){
             event* tempEvt = head->next;
             event* prevEvt = head;
@@ -155,37 +151,71 @@ class Events{
         //Time stamp increases down the list
 };
 
+//Linked list for processes
+struct procNode {
+    procNode(process* p, procNode* n = NULL) : proc(p), next(n) {}
+    process* proc;
+    procNode* next;
+};
+
 class Scheduler {
     public:
-        Scheduler(int q, int p) : quantum(q), maxprio(p) {}
+        Scheduler(int q, int p) : quantum(q), maxprio(p){}
         virtual ~Scheduler(){}
-        virtual void add_process(process*)=0;
-        virtual process* get_next_process()=0;
-        virtual void test_preempty(process*, int)=0;
-    private:
+
+        //Each scheduler implements their own virtual funcs
+        virtual void add_process(process*){
+            return;
+        };
+        virtual process* get_next_process(){
+            return NULL;
+        };
+        virtual void test_preempty(process*, int){
+            return;
+        };
+
+        //Returns name of the scheduler
+        virtual string getSchedName(){
+            return "Scheduler";
+        }
+        //Returns the quantum
+        int getQuantum(){
+            return quantum;
+        }
+        //Returns the maxprio
+        int getMaxprio(){
+            return maxprio;
+        }
+    protected:
         int quantum;
         int maxprio;
 };
 
+//Constructor are not inherited
 class FCFS : public Scheduler{
     public:
-        FCFS(){}
+        FCFS(int q, int p) : Scheduler(q, p) {
+            head = new procNode(NULL);
+        }
+        ~FCFS(){
+            delete head;
+        }
         void add_process(process* p){
-
+            return;
         }
         process* get_next_process(){
-
+            return NULL;
         }
-        void test_preempty(process *p, int curtime){
-            cerr << "FCFS Does not implement test_preempty.\n";
-            exit(1);
+        string getSchedName(){
+            return "FCFS";
         }
     private:
+        procNode* head;
 };
-
+/*
 class LCFS : public Scheduler{
     public:
-        LCFS(){}
+        LCFS(int q, int p) : Scheduler(q, p) {}
         void add_process(process* p){
 
         }
@@ -201,7 +231,7 @@ class LCFS : public Scheduler{
 
 class SRTF : public Scheduler{
     public:
-        SRTF(){}
+        SRTF(int q, int p) : Scheduler(q, p) {}
         void add_process(process* p){
 
         }
@@ -217,7 +247,7 @@ class SRTF : public Scheduler{
 
 class RR : public Scheduler{
     public:
-        RR(){}
+        RR(int q, int p) : Scheduler(q, p) {}
         void add_process(process* p){
 
         }
@@ -233,7 +263,7 @@ class RR : public Scheduler{
 
 class PRIO : public Scheduler{
     public:
-        PRIO(){}
+        PRIO(int q, int p) : Scheduler(q, p) {}
         void add_process(process* p){
 
         }
@@ -249,7 +279,7 @@ class PRIO : public Scheduler{
 
 class PREPRIO : public Scheduler{
     public:
-        PREPRIO(){}
+        PREPRIO(int q, int p) : Scheduler(q, p) {}
         void add_process(process* p){
 
         }
@@ -260,18 +290,25 @@ class PREPRIO : public Scheduler{
         }
     private:
 };
+*/
+
+//Globals
+vector<int> randvals; //Vector containg random integers
 
 //Function prototypes
 void printProcList(vector<process*>&);
 void deleteProcList(vector<process*>&);
 int myrandom(int); //Generates a random number
 void simulation(Events*, Scheduler*);
+typedef int (* FuncSig)(int);
+FuncSig prepMyRandom(char*);
+
+FuncSig prepMyRandom(char*){
+    
+}
 
 int main(int argc, char* argv[]) {
     int c;
-    int maxPrio = 4; //PRIO, PREPRIO, default = 4
-    int quantum = 10000; //RR, PRIO, PREPRIO, default = 100000
-    char sched; //Scheduler type
     Scheduler* myScheduler; //Scheduler for the simulator
     while ((c = getopt(argc,argv,"vtes:")) != -1 )
     {
@@ -286,49 +323,66 @@ int main(int argc, char* argv[]) {
             eFlag = 1;
             break;
         case 's':
-            sscanf(optarg, "%c%d:%d",&sched,&quantum,&maxPrio);
-            if (quantum < 0){
-                cerr << "Invalid quantum, less than 0, using default quantum = 10000.\n";
-                quantum = 10000;
-            }
-            if (maxPrio < 0){
-                cerr << "Invalid maxprio, less than 0, using default maxprio = 4.\n";
-                maxPrio = 4;
-            }
-            
+            char sched; //Scheduler type
+            int maxprio; //PRIO, PREPRIO, default = 4
+            int quantum; //RR, PRIO, PREPRIO, default = 100000
+            sscanf(optarg, "%c%d:%d",&sched,&quantum,&maxprio);
             switch(sched) {
                 case 'F': //FCFS
-                    myScheduler = new FCFS();
+                    myScheduler = new FCFS(10000, 4);
                     break;
-                case 'L': //LCFS
-                    myScheduler = new LCFS();
+                /*case 'L': //LCFS
+                    myScheduler = new LCFS(100000, 4);
                     break;
                 case 'S': //SRTF
-                    myScheduler = new SRTF();
+                    myScheduler = new SRTF(10000, 4);
                     break;
                 case 'R': //Round Robin
-                    myScheduler = new RR();
+                    if (quantum <= 0) {
+                        cerr << "Error: RR - Quantum <= 0.\n";
+                        exit(1)
+                    }
+                    myScheduler = new RR(quantum, 4);
                     break;
                 case 'P': //Priority
-                    myScheduler = new PRIO();
+                    if (quantum <= 0) {
+                        cerr << "Error: Priority - Quantum <= 0.\n";
+                        exit(1)
+                    }
+                    if (maxprio <= 0) {
+                        cerr << "Error: Priority - Max prio <= 0.\n";
+                        exit(1)
+                    }
+                    myScheduler = new PRIO(quantum,maxprio);
                     break;
                 case 'E': //Preempt Priority
-                    myScheduler = new PREPRIO();
-                    break;
+                    if (quantum <= 0) {
+                        cerr << "Error: Preempt Priority - Quantum <= 0.\n";
+                        exit(1)
+                    }
+                    if (maxprio <= 0) {
+                        cerr << "Error: Preempt Priority - Max prio <= 0.\n";
+                        exit(1)
+                    }
+                    myScheduler = new PREPRIO(quantum,maxprio);
+                    break;*/
                 default:
-                    cerr << "Invalid scheduler input.\n";
+                    cerr << "Error: Invalid Scheduler Name.\n";
                     exit(1);                   
             }
             break;
         }
     }
+    //Debug statements, invoked using -v flag
     vtrace("vflag = %d  tflag = %d eflag = %d\n",vFlag,tFlag,eFlag);
-    vtrace("Scheduler: %c, quantum: %d, maxPrio: %d\n",sched,quantum,maxPrio);
+    vtrace("Scheduler: %s, quantum: %d, maxprio: %d\n",myScheduler->getSchedName().c_str(),myScheduler->getQuantum(),myScheduler->getMaxprio());
 
     if ((argc - optind) < 2) { //optind is the index of current argument
         cerr << "Missing input file and rfile\n";
         exit(1);
     }
+
+    //Gettng file names
     char* inputFile = argv[optind];
     char* rFile = argv[optind+1];
     vtrace("Input file: %s, rfile: %s\n",inputFile,rFile);
@@ -339,14 +393,14 @@ int main(int argc, char* argv[]) {
         cerr << "Could not open the rfile.\n";
         exit(1);
     }
-    int r;
+    int r, rsize; //Random int, and total random integer count
     rfile >> rsize; //Reading the size
     while (rfile >> r) {
         randvals.push_back(r); //Populating the random vector
     }
     rfile.close();
-    
-    //Opening process file
+
+    //Opening input file
     ifstream ifile(inputFile);
     if (!ifile) {
         cerr << "Could not open the input file.\n";
@@ -359,7 +413,7 @@ int main(int argc, char* argv[]) {
     Events* evtList = new Events(); //Linked list holding all events
 
     while (ifile >> at >> tc >> cb >> io) {
-        prio = myrandom(maxPrio);
+        prio = myrandom(myScheduler->getMaxprio());
         p = new process(at,tc,cb,io, prio, STATE_CREATED);
         evt = new event(p, at, TRANS_TO_READY);
         procList.push_back(p);
@@ -369,14 +423,8 @@ int main(int argc, char* argv[]) {
 
     printProcList(procList); //Print the process list
     evtList->printEvents(); //Print the event list
-    event* temp; //Checking if getEvent works
-    while ((temp = evtList->getEvent())){ //Get event test
-        temp->printEvent();
-        delete temp;
-    }
-    evtList->rmEvent(evt); //Remove event test
-    evtList->printEvents(); //Print the event list
-    
+
+    //Begin simulation
     simulation(evtList, myScheduler);
     //Clean up
     deleteProcList(procList); //Deleting allocated procs
@@ -384,14 +432,60 @@ int main(int argc, char* argv[]) {
     delete evtList; //Deleting evts
 }
 
+void simulation(Events* evtList, Scheduler* myScheduler){
+    event* evt;
+    process* proc;
+    process_trans_t evtTransTo;
+    int currentTime, timeInPrevState;
+    bool call_scheduler = false;
+    while((evt = evtList->getEvent())) { //Pop an event from event queue
+        //Get the event details
+        proc = evt->evtProcess;
+        evtTransTo = evt->transition;
+        currentTime = evt->evtTimeStamp;
+        timeInPrevState = currentTime - proc->state_ts;
+        //Remove current event object from memory
+        delete evt; evt = nullptr;
+        
+        switch(evtTransTo) {  // which state to transition to?
+            case TRANS_TO_READY:
+                // must come from BLOCKED or from PREEMPTION
+                // must add to run queue
+                call_scheduler = true; // conditional on whether something is run
+                break;
+            case TRANS_TO_RUN:
+                // create event for either preemption or blocking
+                break;
+            case TRANS_TO_BLOCK:
+                //create an event for when process becomes READY again
+                call_scheduler = true;
+                break;
+            case TRANS_TO_PREEMPT:
+                // add to runqueue (no event is generated)
+                call_scheduler = true;
+                break;
+        }
+        /*
+        if(call_scheduler) {
+            if (get_next_event_time() == CURRENT_TIME)
+                continue; //process next event from Event queue
+            call_scheduler = false; // reset global flag
+            if (CURRENT_RUNNING_PROCESS == nullptr) {
+                CURRENT_RUNNING_PROCESS = THE_SCHEDULER->get_next_process();
+                if (CURRENT_RUNNING_PROCESS == nullptr)
+                    continue;
+            }
+        } */
+    }
+}
+
 //The random function
 int myrandom(int burst) {
-    static int ofs = -1;
-    ofs++;
-    if (ofs >= rsize) {
+    static int ofs = 0;
+    if (ofs >= randvals.size()) {
         ofs = 0;
     }
-    return 1 + (randvals[ofs] % burst);
+    return 1 + (randvals[ofs++] % burst);
 }
 
 //Prints the vector of procs
@@ -407,77 +501,3 @@ void deleteProcList(vector<process*>& v){
         delete v[i];
     }
 }
-
-void simulation(Events* evtList, Scheduler* myScheduler){
-    event* evt;
-    process* proc;
-    process_trans_t evtTrans;
-    int currentTime, timeInPrevState;
-    while((evt = evtList->getEvent())) {
-        //Get the details
-        proc = evt->evtProcess;
-        evtTrans = evt->transition;
-        currentTime = evt->evtTimeStamp;
-        timeInPrevState = currentTime - proc->state_ts;
-        //Delete the evt
-        delete evt;
-        evt = nullptr;
-        /*
-        switch(evtTrans) {  // which state to transition to?
-            case TRANS_TO_READY:
-                // must come from BLOCKED or from PREEMPTION
-                // must add to run queue
-                CALL_SCHEDULER = true; // conditional on whether something is run
-                break;
-            case TRANS_TO_RUN:
-                // create event for either preemption or blocking
-                break;
-            case TRANS_TO_BLOCK:
-                //create an event for when process becomes READY again
-                CALL_SCHEDULER = true;
-                break;
-            case TRANS_TO_PREEMPT:
-                // add to runqueue (no event is generated)
-                CALL_SCHEDULER = true;
-                break;
-        }
-        // remove current event object from Memory
-
-        if(CALL_SCHEDULER) {
-            if (get_next_event_time() == CURRENT_TIME)
-                continue; //process next event from Event queue
-            CALL_SCHEDULER = false; // reset global flag
-            if (CURRENT_RUNNING_PROCESS == nullptr) {
-                CURRENT_RUNNING_PROCESS = THE_SCHEDULER->get_next_process();
-                if (CURRENT_RUNNING_PROCESS == nullptr)
-                    continue;
-            }
-        } */
-    }
-}
-// create event to make this process runnable for same time.
-
-/*
-process_state_t x;
-x = STATE_RUNNING;
-if (x == STATE_RUNNING) {
-    cout << "hello world.\n" << endl;
-}
-
-class A {
-    public:
-        A(int x) : i(x) {}
-        void display() const { //Const is a constant method
-            return;
-        }
-    private:
-        int i;
-};
-
-class B : public A { //Without public keyword, then this is a private inheritance - All public A becomes private in B
-    public:
-        B(int x, int z) : A(x), b(z) {} //Constructors are not inhertited
-    private:
-        int b;
-};
-*/
