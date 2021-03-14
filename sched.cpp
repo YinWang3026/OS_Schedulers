@@ -16,8 +16,6 @@ int eFlag = 0;
 
 //Macro definitions
 #define vtrace(fmt...)  do { if (vFlag) { printf(fmt); fflush(stdout); } } while(0)
-#define ttrace(myScheduler)  do { if (tFlag) { printf("SCHED(%d): ", myScheduler->getQueueSize()); \
-    myScheduler->printQueue(); fflush(stdout); } } while(0)
 #define etraceEvtEvtList(evt, evtList)  do { if (eFlag){ cout<<" AddEvent("; evt->printEvent(); \
     cout<<"): "; evtList->printEvents(); cout << "==> "; fflush(stdout); } } while(0)
 #define etraceEvt(evtList)  do { if (eFlag) { evtList->printEvents(); cout << "\n";} }  while(0)
@@ -63,15 +61,23 @@ struct process{
         static_priority(p), state(s), state_ts(at), remain_cputime(ct){
             pid = count++;
             dynamic_priority = static_priority - 1;
+            ft = 0;
+            tt = 0;
+            it = 0;
+            cw = 0;
         }
     void printProcess(){
         printf("PID: %d, AT: %d, TC: %d, CB: %d, IO: %d, State: %s, rem: %d, sPri: %d, dPri: %d, ts: %d\n",
         pid,arrivalTime,totalCpuTime,cpuBurst,ioBurst,state_string[state].c_str(),remain_cputime,
         static_priority,dynamic_priority,state_ts);
     }
+    void printResult(){
+        printf("%04d: %4d %4d %4d %4d %1d | %5d %5d %5d %5d\n",pid, arrivalTime, totalCpuTime, cpuBurst, ioBurst, static_priority,
+            ft, tt, it, cw);
+    }
     int pid; //process id
-    int arrivalTime;
-    int totalCpuTime;
+    int arrivalTime; //at
+    int totalCpuTime; //total time in cpu / running state
     int cpuBurst;
     int ioBurst;
     int static_priority; //myRandom
@@ -81,6 +87,11 @@ struct process{
 
     int remain_cputime; //total cpu subtract what is done
     int dynamic_priority; //static prio - 1
+
+    int ft; //finishing time
+    int tt; //turnaround time: at - ft
+    int it; //total time in io / block state
+    int cw; //total time in wait / ready state
 };
 
 struct event{
@@ -150,30 +161,20 @@ class Scheduler {
     public:
         Scheduler(int q, int p) : quantum(q), maxprio(p){}
         virtual ~Scheduler(){}
-
         //Each scheduler implements their own virtual funcs
-        virtual void add_process(process*){
-            return;
-        };
-        virtual process* get_next_process(){
-            return NULL;
-        };
-        virtual void test_preempty(process*, int){
-            return;
-        };
-
+        virtual void add_process(process*)=0;
+        virtual process* get_next_process()=0;
+        virtual void test_preempty(process*, int)=0;
+        //Prints the current run queue
+        virtual void printQueue()=0;
         //Returns name of the scheduler
         virtual string getSchedName()=0;
-        virtual void printQueue()=0;
+        //Returns the queue size
         virtual int getQueueSize()=0;
         //Returns the quantum
-        int getQuantum(){
-            return quantum;
-        }
+        int getQuantum(){ return quantum; }
         //Returns the maxprio
-        int getMaxprio(){
-            return maxprio;
-        }
+        int getMaxprio(){ return maxprio; }
     protected:
         int quantum;
         int maxprio;
@@ -182,10 +183,7 @@ class Scheduler {
 //Constructor are not inherited
 class FCFS : public Scheduler{
     public:
-        FCFS(int q, int p) : Scheduler(q, p) {
-        }
-        ~FCFS(){
-        }
+        FCFS(int q, int p) : Scheduler(q, p) {}
         void add_process(process* p){
             //Adds to end of queue
             runqueue.push_back(p);
@@ -198,6 +196,9 @@ class FCFS : public Scheduler{
             runqueue.pop_front(); //Delete that pt from queue
             return res;
         }
+        void test_preempty(process*, int){
+            return; //FCFS doesn't use this
+        }
         void printQueue(){
             deque<process*>::iterator it;
             for (it = runqueue.begin(); it < runqueue.end(); it++){
@@ -205,15 +206,10 @@ class FCFS : public Scheduler{
             }
             cout << '\n';
         }
-        int getQueueSize(){
-            return runqueue.size();
-        }
-        string getSchedName(){
-            return "FCFS";
-        }
+        string getSchedName(){ return "FCFS"; }
+        int getQueueSize(){ return runqueue.size(); }
     private:
-        //Proc queue
-        deque<process*> runqueue;
+        deque<process*> runqueue; //Proc queue
 };
 /*
 class LCFS : public Scheduler{
@@ -370,9 +366,9 @@ int main(int argc, char* argv[]) {
         }
     }
     //Debug statements, invoked using -v flag
-    //vtrace("vflag = %d  tflag = %d eflag = %d\n",vFlag,tFlag,eFlag);
-    //vtrace("Scheduler: %s, quantum: %d, maxprio: %d\n",myScheduler->getSchedName().c_str(),
-    //    myScheduler->getQuantum(),myScheduler->getMaxprio());
+    vtrace("vflag = %d  tflag = %d eflag = %d\n",vFlag,tFlag,eFlag);
+    vtrace("Scheduler: %s, quantum: %d, maxprio: %d\n",myScheduler->getSchedName().c_str(),
+        myScheduler->getQuantum(),myScheduler->getMaxprio());
 
     if ((argc - optind) < 2) { //optind is the index of current argument
         cerr << "Missing input file and rfile\n";
@@ -382,7 +378,7 @@ int main(int argc, char* argv[]) {
     //Gettng file names
     char* inputFile = argv[optind];
     char* randomFile = argv[optind+1];
-    //vtrace("Input file: %s, rfile: %s\n",inputFile,randomFile);
+    vtrace("Input file: %s\trfile: %s\n",inputFile,randomFile);
     
     //Opening random value file
     ifstream rfile(randomFile);
@@ -418,19 +414,41 @@ int main(int argc, char* argv[]) {
     }
     ifile.close(); //Closing file
 
-    //printProcList(procList); //Print the process list
-    //evtList->printEvents(); //Print the event list
+    if (vFlag) { printProcList(procList); } //Print the process list
 
     //Begin simulation
     simulation(evtList, myScheduler);
 
     //Printing results
+    int finishTime = 0; //the largest ft in procs
+    double cpuUtil = 0; //Sum up the proc total cpu time and divide by ft
+    double ioUtil = 0; //sum up the
+    double avgTT = 0; //sum the proc tt and divide by # of procs
+    double avgCW = 0; //sum the proc cw and divide by # of procs
+    double throughput = 0; //# of procs divide by ft
+    double numProcs = double(procList.size());
+    printf("%s\n",myScheduler->getSchedName().c_str());
+    for(int i=0; i<procList.size(); i++){
+        p = procList[i];
+        finishTime = max(finishTime, p->ft);
+        cpuUtil += p->totalCpuTime;
+        ioUtil += p->it;
+        avgTT += p->tt;
+        avgCW += p->cw;
+        p->printResult();
+        delete p; //Pointer to proc is not needed anymore
+    }
+    finishTime = double(finishTime);
+    cpuUtil = (cpuUtil/finishTime)*100;
+    ioUtil = (ioUtil/finishTime)*100;
+    avgTT /= numProcs;
+    avgCW /= numProcs;
+    throughput = (numProcs/finishTime)*100;
 
-    printf("%04d: %4d %4d %4d %4d %1d | %5d %5d %5d %5d\n");
-    printf("SUM: %d %.2lf %.2lf %.2lf %.2lf %.3lf\n");
+    printf("SUM: %d %.2lf %.2lf %.2lf %.2lf %.3lf\n", finishTime, cpuUtil, ioUtil, avgTT, avgCW, throughput);
+
     //Clean up
-    //printProcList(procList);
-    deleteProcList(procList); //Deleting allocated procs
+    //deleteProcList(procList); //Deleting allocated procs
     delete myScheduler; //Deleting scheduler
     delete evtList; //Deleting evts
 }
@@ -514,7 +532,7 @@ void simulation(Events* evtList, Scheduler* myScheduler){
                 //Update proc
                 proc->state = STATE_RUNNING; //Update proc state
                 proc->state_ts = currentTime; //Update proc state_ts, aka now
-            
+                proc->cw += timeInPrevState; //Time in ready
                 if (rcb <= quantum){ //Moving to blocked state
                     proc->remain_cputime -= rcb; //reduce the remaining time
                     if (proc->remain_cputime == 0){
@@ -545,6 +563,7 @@ void simulation(Events* evtList, Scheduler* myScheduler){
                 //Update proc
                 proc->state = STATE_BLOCKED; //Update proc state
                 proc->state_ts = currentTime; //Update proc state_ts, aka now
+                proc->it += rio; //Time in IO
                 //fire new event at curr time + rio
                 evt = new event(proc, currentTime+rio, TRANS_TO_READY);
                 etraceEvtEvtList(evt,evtList); //Print queue before
@@ -573,7 +592,8 @@ void simulation(Events* evtList, Scheduler* myScheduler){
 
                 proc->state = STATE_DONE; //Update proc state
                 proc->state_ts = currentTime; //Update proc state_ts, aka now
-                
+                proc->ft = currentTime; //Finishing time
+                proc->tt = currentTime - proc->arrivalTime; //Turn around time
                 //Proc is finished, nothing running call scheudler
                 call_scheduler = true;
                 runningProc = NULL;
@@ -585,7 +605,12 @@ void simulation(Events* evtList, Scheduler* myScheduler){
             
             call_scheduler = false; // reset global flag
             if (runningProc == NULL) { //Currently not running a proc
-                ttrace(myScheduler); //Print the scheduler
+
+                if (tFlag) { //Print the run queue
+                    printf("SCHED(%d): ", myScheduler->getQueueSize());
+                    myScheduler->printQueue();
+                }
+
                 runningProc = myScheduler->get_next_process(); //Give me a proc to run
                 if (runningProc == NULL){
                      //No proc to run
