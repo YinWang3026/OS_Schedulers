@@ -18,7 +18,7 @@ int eFlag = 0;
 #define vtrace(fmt...)  do { if (vFlag) { printf(fmt); fflush(stdout); } } while(0)
 #define etraceEvtEvtList(evt, evtList)  do { if (eFlag){ cout<<" AddEvent("; evt->printEvent(); \
     cout<<"): "; evtList->printEvents(); cout << "==> "; fflush(stdout); } } while(0)
-#define etraceEvt(evtList)  do { if (eFlag) { evtList->printEvents(); cout << "\n";} }  while(0)
+#define etraceEvt(evtList)  do { if (eFlag) { evtList->printEvents(); cout << "\n"; fflush(stdout); } }  while(0)
 
 //Enum definitions
 enum process_state_t{ 
@@ -183,7 +183,7 @@ class Scheduler {
 //Constructor are not inherited
 class FCFS : public Scheduler{
     public:
-        FCFS(int q, int p) : Scheduler(q, p) {}
+        FCFS() : Scheduler(10000, 4) {}
         void add_process(process* p){
             //Adds to end of queue
             runqueue.push_back(p);
@@ -211,56 +211,106 @@ class FCFS : public Scheduler{
     private:
         deque<process*> runqueue; //Proc queue
 };
-/*
+
 class LCFS : public Scheduler{
     public:
-        LCFS(int q, int p) : Scheduler(q, p) {}
+        LCFS() : Scheduler(10000, 4) {}
         void add_process(process* p){
-
+            //Adds to front of queue
+            runqueue.push_front(p);
         }
         process* get_next_process(){
-
+            if (runqueue.empty()){
+                return NULL;
+            }
+            process* res = runqueue.front(); //Get front pt
+            runqueue.pop_front(); //Delete that pt from queue
+            return res;
         }
-        void test_preempty(process *p, int curtime){
-            cerr << "LCFS Does not implement test_preempty.\n";
-            exit(1);
+        void test_preempty(process*, int){
+            return; //LCFS doesn't use this
         }
+        void printQueue(){
+            deque<process*>::iterator it;
+            for (it = runqueue.begin(); it < runqueue.end(); it++){
+                cout << (*it)->pid << ":" << (*it)->state_ts << " ";
+            }
+            cout << '\n';
+        }
+        string getSchedName(){ return "LCFS"; }
+        int getQueueSize(){ return runqueue.size(); }
     private:
+        deque<process*> runqueue; //Proc queue
 };
 
 class SRTF : public Scheduler{
     public:
-        SRTF(int q, int p) : Scheduler(q, p) {}
+        SRTF() : Scheduler(10000, 4) {}
         void add_process(process* p){
-
+            deque<process*>::iterator it;
+            for (it = runqueue.begin(); it < runqueue.end(); it++){
+               if (p->remain_cputime < (*it)->remain_cputime){
+                    break;
+                }
+            }
+            it = runqueue.insert(it,p);
         }
         process* get_next_process(){
-
+            if (runqueue.empty()){
+                return NULL;
+            }
+            process* res = runqueue.front(); //Get front pt
+            runqueue.pop_front(); //Delete that pt from queue
+            return res;
         }
-        void test_preempty(process *p, int curtime){
-            cerr << "SRTF Does not implement test_preempty.\n";
-            exit(1);
+        void test_preempty(process*, int){
+            return; //SRTF doesn't use this
         }
+        void printQueue(){
+            deque<process*>::iterator it;
+            for (it = runqueue.begin(); it < runqueue.end(); it++){
+                cout << (*it)->pid << ":" << (*it)->state_ts << " ";
+            }
+            cout << '\n';
+        }
+        string getSchedName(){ return "SRTF"; }
+        int getQueueSize(){ return runqueue.size(); }
     private:
+        deque<process*> runqueue; //Proc queue
 };
 
 class RR : public Scheduler{
     public:
-        RR(int q, int p) : Scheduler(q, p) {}
+        RR(int q) : Scheduler(q, 4) {}
         void add_process(process* p){
-
+            runqueue.push_back(p);
         }
         process* get_next_process(){
-
+            if (runqueue.empty()){
+                return NULL;
+            }
+            process* res = runqueue.front(); //Get front pt
+            runqueue.pop_front(); //Delete that pt from queue
+            return res;
         }
-        void test_preempty(process *p, int curtime){
-            cerr << "RR Does not implement test_preempty.\n";
-            exit(1);
+        void test_preempty(process*, int){
+            return; //SRTF doesn't use this
         }
+        void printQueue(){
+            deque<process*>::iterator it;
+            for (it = runqueue.begin(); it < runqueue.end(); it++){
+                cout << (*it)->pid << ":" << (*it)->state_ts << " ";
+            }
+            cout << '\n';
+        }
+        string getSchedName(){ return "RR " + to_string(quantum); }
+        int getQueueSize(){ return runqueue.size(); }
     private:
+        deque<process*> runqueue; //Proc queue
+
 };
 
-class PRIO : public Scheduler{
+/*class PRIO : public Scheduler{
     public:
         PRIO(int q, int p) : Scheduler(q, p) {}
         void add_process(process* p){
@@ -317,27 +367,27 @@ int main(int argc, char* argv[]) {
             break;
         case 's':
             char sched; //Scheduler type
-            int maxprio; //PRIO, PREPRIO, default = 4
-            int quantum; //RR, PRIO, PREPRIO, default = 100000
+            int maxprio = 4; //PRIO, PREPRIO, default = 4
+            int quantum = 10000; //RR, PRIO, PREPRIO, default = 100000
             sscanf(optarg, "%c%d:%d",&sched,&quantum,&maxprio);
             switch(sched) {
                 case 'F': //FCFS
-                    myScheduler = new FCFS(10000, 4);
+                    myScheduler = new FCFS();
                     break;
-                /*case 'L': //LCFS
-                    myScheduler = new LCFS(100000, 4);
+                case 'L': //LCFS
+                    myScheduler = new LCFS();
                     break;
                 case 'S': //SRTF
-                    myScheduler = new SRTF(10000, 4);
+                    myScheduler = new SRTF();
                     break;
                 case 'R': //Round Robin
                     if (quantum <= 0) {
                         cerr << "Error: RR - Quantum <= 0.\n";
-                        exit(1)
+                        exit(1);
                     }
-                    myScheduler = new RR(quantum, 4);
+                    myScheduler = new RR(quantum);
                     break;
-                case 'P': //Priority
+                /*case 'P': //Priority
                     if (quantum <= 0) {
                         cerr << "Error: Priority - Quantum <= 0.\n";
                         exit(1)
@@ -414,7 +464,6 @@ int main(int argc, char* argv[]) {
         evtList->putEvent(evt);
     }
     ifile.close(); //Closing file
-
     if (vFlag) { printProcList(procList); } //Print the process list
 
     //Begin simulation
@@ -477,9 +526,9 @@ void simulation(Events* evtList, Scheduler* myScheduler){
     bool call_scheduler;
 
     if (eFlag){
-        cout << "\nShowEventQ: ";
+        printf("ShowEventQ: ");
         evtList->printEvents();
-        cout << "\n";
+        printf("\n");
     }
     runningProc = NULL; //No proc running
     call_scheduler = false; //Not calling the scheduler
@@ -573,7 +622,8 @@ void simulation(Events* evtList, Scheduler* myScheduler){
                 //Update evtList
                 evtList->putEvent(evt); //Add evt to qeueue
                 etraceEvt(evtList); //Print queue after
-                
+                //Update dynamic prio
+                proc->dynamic_priority = proc->static_priority - 1; //When finishing I/O
                 //Proc is blocked, nothing running call scheduler
                 call_scheduler = true;
                 runningProc = NULL;
