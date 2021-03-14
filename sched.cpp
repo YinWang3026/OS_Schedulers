@@ -17,7 +17,7 @@ int eFlag = 0;
 //Macro definitions
 #define vtrace(fmt...)  do { if (vFlag) { printf(fmt); fflush(stdout); } } while(0)
 #define ttrace(fmt...)  do { if (tFlag) { printf(fmt); fflush(stdout); } } while(0)
-#define etrace(fmt...)  do { if (eFlag) { printf(fmt); fflush(stdout); } } while(0)
+#define etrace(fmt...)  do { if (tFlag) { printf(fmt); fflush(stdout); } } while(0)
 
 //Enum definitions
 enum process_state_t{ 
@@ -76,11 +76,7 @@ struct event{
         next = NULL;
     }
     void printEvent(){
-        printf("evtID: %d, PID: %d, ts: %d, trans: %d\n",evtid,evtProcess->pid,evtTimeStamp,
-        transition);
-    }
-    void eTraceEvent(){
-        etrace("%d:%d:%s ",evtTimeStamp,evtProcess->pid,state_string[evtProcess->state].c_str());
+        printf("%d:%d:%s", evtTimeStamp,evtProcess->pid,state_string[transition].c_str());
     }
     int evtid; //An id
     process* evtProcess; //The proc associated with this event
@@ -148,12 +144,11 @@ class Events{
         void printEvents(){
             event* temp = head->next;
             while (temp != NULL) {
-                temp->eTraceEvent();
+                temp->printEvent();
+                cout << ' ';
                 temp=temp->next;
             }
-            etrace("\n");
         }
-
     private:
         event* head; //Dummy head of linked list of evts
         //Time stamp increases down the list
@@ -204,10 +199,11 @@ class FCFS : public Scheduler{
             runqueue.push_back(p);
         }
         process* get_next_process(){
-            //Returns the proc at the front of queue
-            //and delete it from queue
-            process* res = runqueue.front();
-            runqueue.pop_front();
+            if (runqueue.empty()){
+                return NULL;
+            }
+            process* res = runqueue.front(); //Get front pt
+            runqueue.pop_front(); //Delete that pt from queue
             return res;
         }
         string getSchedName(){
@@ -373,7 +369,8 @@ int main(int argc, char* argv[]) {
     }
     //Debug statements, invoked using -v flag
     vtrace("vflag = %d  tflag = %d eflag = %d\n",vFlag,tFlag,eFlag);
-    vtrace("Scheduler: %s, quantum: %d, maxprio: %d\n",myScheduler->getSchedName().c_str(),myScheduler->getQuantum(),myScheduler->getMaxprio());
+    vtrace("Scheduler: %s, quantum: %d, maxprio: %d\n",myScheduler->getSchedName().c_str(),
+        myScheduler->getQuantum(),myScheduler->getMaxprio());
 
     if ((argc - optind) < 2) { //optind is the index of current argument
         cerr << "Missing input file and rfile\n";
@@ -419,8 +416,8 @@ int main(int argc, char* argv[]) {
     }
     ifile.close(); //Closing file
 
-    printProcList(procList); //Print the process list
-    evtList->printEvents(); //Print the event list
+    //printProcList(procList); //Print the process list
+    //evtList->printEvents(); //Print the event list
 
     //Begin simulation
     simulation(evtList, myScheduler);
@@ -456,9 +453,20 @@ void deleteProcList(vector<process*>& v){
 void simulation(Events* evtList, Scheduler* myScheduler){
     event* evt;
     process* proc;
+    process* runningProc;
     process_trans_t evtTransTo;
-    int currentTime, timeInPrevState;
-    bool call_scheduler = false;
+    int currentTime, timeInPrevState, rcb, rio;
+    int quantum = myScheduler->getQuantum();
+    bool call_scheduler;
+
+    if (vFlag){
+        cout << "ShowEventQ: ";
+        evtList->printEvents();
+        cout << '\n';
+    }
+    runningProc = NULL; //No proc running
+    call_scheduler = false; //Not calling the scheduler
+
     while((evt = evtList->getEvent())) { //Pop an event from event queue
         //Get the event details
         proc = evt->evtProcess;
@@ -468,35 +476,88 @@ void simulation(Events* evtList, Scheduler* myScheduler){
         //Remove current event object from memory
         delete evt; evt = nullptr;
         
-        switch(evtTransTo) {  // which state to transition to?
-            case TRANS_TO_READY:
-                // must come from BLOCKED or from PREEMPTION
-                // must add to run queue
-                call_scheduler = true; // conditional on whether something is run
+        switch(evtTransTo) {  //which state to transition to?
+            //The ready state
+            case TRANS_TO_READY:    // must come from BLOCKED or from PREEMPTION
+                //timestamp, pid, how long: FROM -> TO, How long from "from" to "to"
+                vtrace("%d %d %d: %s -> %s\n", currentTime, proc->pid, timeInPrevState, 
+                    state_string[proc->state].c_str(), state_string[STATE_READY].c_str());
+                
+                //Creating event ready->run
+                evt = new event(proc, currentTime, TRANS_TO_RUN);
+                proc->state = STATE_READY; //Update proc state
+                proc->state_ts = currentTime; //Update proc state_ts, aka now
+                if (eFlag){
+                    cout << "AddEvent(";
+                    evt->printEvent();
+                    cout << "):";
+                    evtList->printEvents();
+                    cout << " ==> ";
+                }
+
+            
+                evtList->putEvent(evt);
+
+                if (eFlag){ evtList->printEvents(); cout << "\n";}
+             
+
+                
+                //Adding proc to run queue
+                myScheduler->add_process(proc); //Adding proc to run queue
+                call_scheduler = true; //conditional on whether something is run
                 break;
+            
+            //The running state
             case TRANS_TO_RUN:
                 // create event for either preemption or blocking
+                vtrace("%d %d %d: %s -> %s cb=%d rem=%d prio=%d\n", currentTime, proc->pid, timeInPrevState, 
+                    state_string[proc->state].c_str(), state_string[STATE_RUNNING].c_str(), 
+                    rcb, proc->remain_cputime, proc->dynamic_priority);
+                
+                rcb = myrandom(proc->cpuBurst);
+                proc->remain_cputime -= rcb;
+
+                //To Blocked
+
+                //Or to preempt
+                
                 break;
+
+            //The block state
             case TRANS_TO_BLOCK:
                 //create an event for when process becomes READY again
+                vtrace("%d %d %d: %s -> %s\n", currentTime, proc->pid, timeInPrevState, 
+                    state_string[proc->state].c_str(), state_string[STATE_BLOCKED].c_str());
+                //Do IO brust
+                rio = myrandom(proc->ioBurst);
+                evt = new event(proc, rio, TRANS_TO_READY);
+                evtList->putEvent(evt);
                 call_scheduler = true;
                 break;
+
+            //The preempt state, prob not used in FLS
             case TRANS_TO_PREEMPT:
                 // add to runqueue (no event is generated)
                 call_scheduler = true;
                 break;
         }
-        /*
+        
         if(call_scheduler) {
-            if (get_next_event_time() == CURRENT_TIME)
-                continue; //process next event from Event queue
+            if (evtList->getNextEventTime() == currentTime)
+                continue; //Have to handle more events at the same time stamp
+            
             call_scheduler = false; // reset global flag
-            if (CURRENT_RUNNING_PROCESS == nullptr) {
-                CURRENT_RUNNING_PROCESS = THE_SCHEDULER->get_next_process();
-                if (CURRENT_RUNNING_PROCESS == nullptr)
+            if (runningProc == nullptr) { //Currently not running a proc
+                runningProc = myScheduler->get_next_process(); //Give me a proc to run
+                if (runningProc == nullptr){
+                     //No proc to run
                     continue;
+                }else{
+                    //There is a proc to run, make an event
+
+                }
             }
-        } */
+        } 
     }
 }
 
