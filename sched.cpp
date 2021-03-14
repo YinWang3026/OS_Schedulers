@@ -423,6 +423,11 @@ int main(int argc, char* argv[]) {
 
     //Begin simulation
     simulation(evtList, myScheduler);
+
+    //Printing results
+
+    printf("%04d: %4d %4d %4d %4d %1d | %5d %5d %5d %5d\n");
+    printf("SUM: %d %.2lf %.2lf %.2lf %.2lf %.3lf\n");
     //Clean up
     //printProcList(procList);
     deleteProcList(procList); //Deleting allocated procs
@@ -462,10 +467,10 @@ void simulation(Events* evtList, Scheduler* myScheduler){
     int quantum = myScheduler->getQuantum();
     bool call_scheduler;
 
-    if (vFlag){
+    if (eFlag){
         cout << "\nShowEventQ: ";
         evtList->printEvents();
-        cout << "\n\n";
+        cout << "\n";
     }
     runningProc = NULL; //No proc running
     call_scheduler = false; //Not calling the scheduler
@@ -491,9 +496,8 @@ void simulation(Events* evtList, Scheduler* myScheduler){
                 proc->state_ts = currentTime; //Update proc state_ts, aka now
                 
                 myScheduler->add_process(proc); //Adding proc to run queue
-                ttrace(myScheduler);
                 call_scheduler = true; //conditional on whether something is run
-                runningProc = NULL;
+                //runningProc = NULL; //Might have a proc currently running
                 break;
 
             //The running state
@@ -548,8 +552,7 @@ void simulation(Events* evtList, Scheduler* myScheduler){
                 evtList->putEvent(evt); //Add evt to qeueue
                 etraceEvt(evtList); //Print queue after
                 
-                //Print scheduler queue
-                ttrace(myScheduler);
+                //Proc is blocked, nothing running call scheduler
                 call_scheduler = true;
                 runningProc = NULL;
                 break;
@@ -558,7 +561,6 @@ void simulation(Events* evtList, Scheduler* myScheduler){
                 // add to runqueue (no event is generated)
                 myScheduler->add_process(proc); //Adding proc to run queue
 
-                ttrace(myScheduler);
                 call_scheduler = true;
                 runningProc = NULL;
 
@@ -571,6 +573,10 @@ void simulation(Events* evtList, Scheduler* myScheduler){
 
                 proc->state = STATE_DONE; //Update proc state
                 proc->state_ts = currentTime; //Update proc state_ts, aka now
+                
+                //Proc is finished, nothing running call scheudler
+                call_scheduler = true;
+                runningProc = NULL;
                 break;
         }
         if(call_scheduler) {
@@ -579,6 +585,7 @@ void simulation(Events* evtList, Scheduler* myScheduler){
             
             call_scheduler = false; // reset global flag
             if (runningProc == NULL) { //Currently not running a proc
+                ttrace(myScheduler); //Print the scheduler
                 runningProc = myScheduler->get_next_process(); //Give me a proc to run
                 if (runningProc == NULL){
                      //No proc to run
