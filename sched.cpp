@@ -295,7 +295,6 @@ class PREPRIO : public Scheduler{
 vector<int> randvals; //Vector containg the random integers
 //Function prototypes
 void printProcList(vector<process*>&);
-void deleteProcList(vector<process*>&);
 int myrandom(int); //Generates a random number
 void simulation(Events*, Scheduler*);
 
@@ -421,12 +420,12 @@ int main(int argc, char* argv[]) {
 
     //Printing results
     int finishTime = 0; //the largest ft in procs
-    double cpuUtil = 0; //Sum up the proc total cpu time and divide by ft
+    double cpuUtil = 0; //Sum up the total cpu time and divide by ft
     double ioUtil = 0; //sum up the
     double avgTT = 0; //sum the proc tt and divide by # of procs
     double avgCW = 0; //sum the proc cw and divide by # of procs
     double throughput = 0; //# of procs divide by ft
-    double numProcs = double(procList.size());
+    double numProcs = procList.size();
     printf("%s\n",myScheduler->getSchedName().c_str());
     for(int i=0; i<procList.size(); i++){
         p = procList[i];
@@ -444,11 +443,9 @@ int main(int argc, char* argv[]) {
     avgTT /= numProcs;
     avgCW /= numProcs;
     throughput = (numProcs/finishTime)*100;
-
     printf("SUM: %d %.2lf %.2lf %.2lf %.2lf %.3lf\n", finishTime, cpuUtil, ioUtil, avgTT, avgCW, throughput);
 
     //Clean up
-    //deleteProcList(procList); //Deleting allocated procs
     delete myScheduler; //Deleting scheduler
     delete evtList; //Deleting evts
 }
@@ -466,13 +463,6 @@ int myrandom(int burst) {
 void printProcList(vector<process*>& v){
     for (int i=0; i<v.size(); i++){
         v[i]->printProcess();
-    }
-}
-
-//Deleting every allocated procs
-void deleteProcList(vector<process*>& v){
-    for (int i=0; i<v.size(); i++){
-        delete v[i];
     }
 }
 
