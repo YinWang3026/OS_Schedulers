@@ -27,14 +27,16 @@ enum process_state_t{
     STATE_CREATED,
     STATE_READY,
     STATE_RUNNING,
-    STATE_BLOCKED
+    STATE_BLOCKED,
+    STATE_DONE
 };
 
 string state_string[] = { //Print the state
     "CREATED",
     "READY",
     "RUNNG",
-    "BLOCK"
+    "BLOCK",
+    "DONE"
 };
 
 enum process_trans_t{
@@ -42,6 +44,7 @@ enum process_trans_t{
     TRANS_TO_READY, //Run -> Ready, Block -> Ready
     TRANS_TO_BLOCK, //Running -> Block
     TRANS_TO_PREEMPT, //Create -> Ready
+    TRANS_TO_DONE
 };
 
 string trans_string[] = { //Print the state
@@ -49,6 +52,7 @@ string trans_string[] = { //Print the state
     "READY",
     "BLOCK",
     "PRMPT",
+    "DONE",
 };
 
 //Struct definitions
@@ -420,7 +424,8 @@ int main(int argc, char* argv[]) {
     //Begin simulation
     simulation(evtList, myScheduler);
     //Clean up
-    //deleteProcList(procList); //Deleting allocated procs
+    //printProcList(procList);
+    deleteProcList(procList); //Deleting allocated procs
     delete myScheduler; //Deleting scheduler
     delete evtList; //Deleting evts
 }
@@ -488,6 +493,7 @@ void simulation(Events* evtList, Scheduler* myScheduler){
                 myScheduler->add_process(proc); //Adding proc to run queue
                 ttrace(myScheduler);
                 call_scheduler = true; //conditional on whether something is run
+                runningProc = NULL;
                 break;
 
             //The running state
@@ -505,19 +511,20 @@ void simulation(Events* evtList, Scheduler* myScheduler){
                 proc->state = STATE_RUNNING; //Update proc state
                 proc->state_ts = currentTime; //Update proc state_ts, aka now
             
-                if (rcb <= quantum && proc->remain_cputime >= 0){ //Moving to blocked state
+                if (rcb <= quantum){ //Moving to blocked state
                     proc->remain_cputime -= rcb; //reduce the remaining time
-                    if (proc->remain_cputime ==0){
-                        exit(1);
+                    if (proc->remain_cputime == 0){
+                        //Process complete
+                        evt = new event(proc, currentTime+rcb, TRANS_TO_DONE);
+                    } else{
+                        //fire new event at curr time + rcb
+                        evt = new event(proc, currentTime+rcb, TRANS_TO_BLOCK);
                     }
-                    //fire new event at curr time + rcb
-                    evt = new event(proc, currentTime+rcb, TRANS_TO_BLOCK);
                     etraceEvtEvtList(evt,evtList); //Print queue before
                     //Update evtList
                     evtList->putEvent(evt); //Add evt to qeueue
                     etraceEvt(evtList); //Print queue after
                     
-                    runningProc = NULL;
                 } else { // Greater than quantum, get preempted
 
                 }
@@ -544,6 +551,7 @@ void simulation(Events* evtList, Scheduler* myScheduler){
                 //Print scheduler queue
                 ttrace(myScheduler);
                 call_scheduler = true;
+                runningProc = NULL;
                 break;
             //The preempt state, prob not used in FLS
             case TRANS_TO_PREEMPT:
@@ -554,6 +562,15 @@ void simulation(Events* evtList, Scheduler* myScheduler){
                 call_scheduler = true;
                 runningProc = NULL;
 
+                break;
+
+            case TRANS_TO_DONE:
+                vtrace("%d %d %d: %s -> %s rem=%d prio=%d\n", currentTime, proc->pid, timeInPrevState, 
+                    state_string[proc->state].c_str(), state_string[STATE_DONE].c_str(), 
+                    proc->remain_cputime, proc->dynamic_priority);
+
+                proc->state = STATE_DONE; //Update proc state
+                proc->state_ts = currentTime; //Update proc state_ts, aka now
                 break;
         }
         if(call_scheduler) {
