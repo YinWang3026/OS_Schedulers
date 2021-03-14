@@ -291,8 +291,10 @@ class PREPRIO : public Scheduler{
 };
 */
 
-//Global var
+//Global var couz im too lazy to make a place to put them
 vector<int> randvals; //Vector containg the random integers
+int totalIoUtil; //holds the total IO utilization
+
 //Function prototypes
 void printProcList(vector<process*>&);
 int myrandom(int); //Generates a random number
@@ -421,7 +423,7 @@ int main(int argc, char* argv[]) {
     //Printing results
     int finishTime = 0; //the largest ft in procs
     double cpuUtil = 0; //Sum up the total cpu time and divide by ft
-    double ioUtil = 0; //sum up the
+    double ioUtil = double(totalIoUtil); //Already calculated
     double avgTT = 0; //sum the proc tt and divide by # of procs
     double avgCW = 0; //sum the proc cw and divide by # of procs
     double throughput = 0; //# of procs divide by ft
@@ -431,7 +433,6 @@ int main(int argc, char* argv[]) {
         p = procList[i];
         finishTime = max(finishTime, p->ft);
         cpuUtil += p->totalCpuTime;
-        ioUtil += p->it;
         avgTT += p->tt;
         avgCW += p->cw;
         p->printResult();
@@ -471,7 +472,7 @@ void simulation(Events* evtList, Scheduler* myScheduler){
     process* proc;
     process* runningProc;
     process_trans_t evtTransTo;
-    int currentTime, timeInPrevState, rcb, rio;
+    int currentTime, timeInPrevState, rcb, rio, ioStart, ioEnd;
     int quantum = myScheduler->getQuantum();
     bool call_scheduler;
 
@@ -482,6 +483,9 @@ void simulation(Events* evtList, Scheduler* myScheduler){
     }
     runningProc = NULL; //No proc running
     call_scheduler = false; //Not calling the scheduler
+    totalIoUtil = 0;
+    ioStart = 0; //Start period of current io
+    ioEnd = 0; //End period of current io
 
     while((evt = evtList->getEvent())) { //Pop an event from event queue
         //Get the event details
@@ -498,13 +502,12 @@ void simulation(Events* evtList, Scheduler* myScheduler){
                 //timestamp of the evt, pid, how long was prev state: FROM -> TO
                 vtrace("%d %d %d: %s -> %s\n", currentTime, proc->pid, timeInPrevState, 
                     state_string[proc->state].c_str(), state_string[STATE_READY].c_str());
-                
                 //Update proc
                 proc->state = STATE_READY; //Update proc state
                 proc->state_ts = currentTime; //Update proc state_ts, aka now
-                
-                myScheduler->add_process(proc); //Adding proc to run queue
-                call_scheduler = true; //conditional on whether something is run
+                //Adding proc to run queue
+                myScheduler->add_process(proc); 
+                call_scheduler = true;
                 //runningProc = NULL; //Might have a proc currently running
                 break;
 
@@ -554,6 +557,16 @@ void simulation(Events* evtList, Scheduler* myScheduler){
                 proc->state = STATE_BLOCKED; //Update proc state
                 proc->state_ts = currentTime; //Update proc state_ts, aka now
                 proc->it += rio; //Time in IO
+                //Calculate the total IO Utilization
+                if (currentTime > ioEnd){ //No overlap
+                    totalIoUtil += rio;
+                    ioStart = currentTime;
+                    ioEnd = currentTime + rio;
+                } else if (currentTime <= ioEnd && ((currentTime+rio) > ioEnd)){ //Overlap
+                    totalIoUtil += ((currentTime + rio) - ioEnd); //Need to take out overlap
+                    ioEnd = currentTime + rio;
+                    ioStart = currentTime;
+                } //else, total overlap, just ignore
                 //fire new event at curr time + rio
                 evt = new event(proc, currentTime+rio, TRANS_TO_READY);
                 etraceEvtEvtList(evt,evtList); //Print queue before
