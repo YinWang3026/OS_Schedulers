@@ -160,19 +160,22 @@ class Events{
 
 class Scheduler {
     public:
-        Scheduler(int q, int p) : quantum(q), maxprio(p){}
-        virtual ~Scheduler(){}
+        Scheduler(int q, int p) : quantum(q), maxprio(p), 
+            runqueue(new deque<process*>()){}
+        virtual ~Scheduler(){
+            delete runqueue;
+        }
         //Each scheduler must implement add proc
         virtual void add_process(process*)=0;
         //Returns name of the scheduler, must implement
         virtual string getSchedName()=0;
         //get proc is optional implement
         virtual process* get_next_process(){
-            if (runqueue.empty()){
+            if (runqueue->empty()){
                 return NULL;
             }
-            process* res = runqueue.front(); //Get front pt
-            runqueue.pop_front(); //Delete that pt from queue
+            process* res = runqueue->front(); //Get front pt
+            runqueue->pop_front(); //Delete that pt from queue
             return res;
         }
         //test preempty is optional implement
@@ -181,15 +184,15 @@ class Scheduler {
         }
         //General functions ...
         //Prints the current run queue
-        void printQueue(){
+        virtual void printQueue(){
             deque<process*>::iterator it;
-            for (it = runqueue.begin(); it < runqueue.end(); it++){
+            for (it = runqueue->begin(); it < runqueue->end(); it++){
                 cout << (*it)->pid << ":" << (*it)->state_ts << " ";
             }
             cout << '\n';
         }        
         //Returns the queue size
-        int getQueueSize(){ return runqueue.size(); }
+        int getQueueSize(){ return runqueue->size(); }
         //Returns the quantum
         int getQuantum(){ return quantum; }
         //Returns the maxprio
@@ -197,7 +200,7 @@ class Scheduler {
     protected:
         int quantum;
         int maxprio;
-        deque<process*> runqueue; //Process queue
+        deque<process*>* runqueue; //Process queue
 };
 
 //Constructor are not inherited
@@ -206,7 +209,7 @@ class FCFS : public Scheduler{
         FCFS() : Scheduler(10000, 4) {}
         void add_process(process* p){
             //Adds to end of queue
-            runqueue.push_back(p);
+            runqueue->push_back(p);
         }
         string getSchedName(){ return "FCFS"; }
 };
@@ -216,7 +219,7 @@ class LCFS : public Scheduler{
         LCFS() : Scheduler(10000, 4) {}
         void add_process(process* p){
             //Adds to front of queue
-            runqueue.push_front(p);
+            runqueue->push_front(p);
         }
         string getSchedName(){ return "LCFS"; }
 };
@@ -226,12 +229,12 @@ class SRTF : public Scheduler{
         SRTF() : Scheduler(10000, 4) {}
         void add_process(process* p){
             deque<process*>::iterator it;
-            for (it = runqueue.begin(); it < runqueue.end(); it++){
+            for (it = runqueue->begin(); it < runqueue->end(); it++){
                if (p->remain_cputime < (*it)->remain_cputime){
                     break;
                 }
             }
-            it = runqueue.insert(it,p);
+            it = runqueue->insert(it,p);
         }
         string getSchedName(){ return "SRTF"; }
 };
@@ -240,28 +243,42 @@ class RR : public Scheduler{
     public:
         RR(int q) : Scheduler(q, 4) {}
         void add_process(process* p){
-            runqueue.push_back(p);
+            runqueue->push_back(p);
         }
         string getSchedName(){ return "RR " + to_string(quantum); }
 };
 
-/*class PRIO : public Scheduler{
+class PRIO : public Scheduler{
     public:
-        PRIO(int q, int p) : Scheduler(q, p) {}
+        PRIO(int q, int p) : Scheduler(q, p),
+            expqueue(new deque<process*>()) {}
+        ~PRIO(){
+            delete expqueue;
+            delete runqueue;
+        }
         void add_process(process* p){
-
+            if (p->dynamic_priority == -1) { // reset dynamic priority on -1
+                p->dynamic_priority = p->static_priority - 1;
+                add_to_expqueue(p);
+            }
         }
         process* get_next_process(){
+            //get from active, if empty, swap active and expqueue pointers
+        }
+
+        void add_to_expqueue(process* p){
 
         }
-        void test_preempty(process *p, int curtime){
-            cerr << "FCFS Does not implement test_preempty.\n";
-            exit(1);
-        }
+  
+        
+        string getSchedName(){ return "PRIO " + to_string(quantum); }
+
     private:
+        vector<deque<process*>>* activeQ;
+        vector<deque<process*>>* activeQ;
 };
 
-class PREPRIO : public Scheduler{
+/*class PREPRIO : public Scheduler{
     public:
         PREPRIO(int q, int p) : Scheduler(q, p) {}
         void add_process(process* p){
@@ -321,18 +338,18 @@ int main(int argc, char* argv[]) {
                     }
                     myScheduler = new RR(quantum);
                     break;
-                /*case 'P': //Priority
+                case 'P': //Priority
                     if (quantum <= 0) {
                         cerr << "Error: Priority - Quantum <= 0.\n";
-                        exit(1)
+                        exit(1);
                     }
                     if (maxprio <= 0) {
                         cerr << "Error: Priority - Max prio <= 0.\n";
-                        exit(1)
+                        exit(1);
                     }
                     myScheduler = new PRIO(quantum,maxprio);
                     break;
-                case 'E': //Preempt Priority
+                /*case 'E': //Preempt Priority
                     if (quantum <= 0) {
                         cerr << "Error: Preempt Priority - Quantum <= 0.\n";
                         exit(1)
@@ -553,6 +570,7 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                 //Update proc
                 proc->state = STATE_BLOCKED; //Update proc state
                 proc->state_ts = currentTime; //Update proc state_ts, aka now
+                proc->dynamic_priority = proc->static_priority - 1; //When finishing I/O, reset dynamic priority
                 proc->it += rio; //Time in IO
                 //Calculate the total IO Utilization
                 if (currentTime > ioEnd){ //No overlap
@@ -570,8 +588,6 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                 //Update evtList
                 evtList->putEvent(evt); //Add evt to qeueue
                 etraceEvt(evtList); //Print queue after
-                //Update dynamic prio
-                proc->dynamic_priority = proc->static_priority - 1; //When finishing I/O
                 //Proc is blocked, nothing running call scheduler
                 call_scheduler = true;
                 runningProc = NULL;
@@ -583,6 +599,7 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                     rcb, proc->remain_cputime, proc->dynamic_priority);
                 proc->state = STATE_READY;
                 proc->state_ts = currentTime;
+                proc->dynamic_priority -= 1; //Each preemption decreases dynamic priority by 1
                 // add to runqueue (no event is generated)
                 myScheduler->add_process(proc); //Adding proc to run queue
                 call_scheduler = true;
