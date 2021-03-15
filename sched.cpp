@@ -162,33 +162,16 @@ class Scheduler {
     public:
         Scheduler(int q, int p) : quantum(q), maxprio(p){}
         virtual ~Scheduler(){}
-        //Each scheduler must implement add proc
-        virtual void add_process(process*)=0;
         //Returns name of the scheduler, must implement
         virtual string getSchedName()=0;
-        //get proc is optional implement
-        virtual process* get_next_process(){
-            if (runqueue.empty()){
-                return NULL;
-            }
-            process* res = runqueue.front(); //Get front pt
-            runqueue.pop_front(); //Delete that pt from queue
-            return res;
-        }
-        //test preempty is optional implement
-        virtual void test_preempty(process*, int){
-            return;
-        }
-        //General functions ...
         //Prints the current run queue
-        virtual void printQueue(){
-            deque<process*>::iterator it;
-            cout << "SCHED (" << runqueue.size() << "): ";
-            for (it = runqueue.begin(); it < runqueue.end(); it++){
-                cout << (*it)->pid << ":" << (*it)->state_ts << " ";
-            }
-            cout << '\n';
-        }        
+        virtual void printQueue()=0;
+        //Each scheduler must implement add proc
+        virtual void add_process(process*)=0;
+        //get proc is optional implement
+        virtual process* get_next_process()=0;
+        //test preempty is optional implement, no pure virtual
+        virtual void test_preempty(process*, int){}
         //Returns the quantum
         int getQuantum(){ return quantum; }
         //Returns the maxprio
@@ -196,13 +179,36 @@ class Scheduler {
     protected:
         int quantum;
         int maxprio;
+};
+
+class NotPrioScheduler : public Scheduler{
+    public:
+        NotPrioScheduler(int q) : Scheduler(q,4){}
+        process* get_next_process(){
+            if (runqueue.empty()){
+                return NULL;
+            }
+            process* res = runqueue.front(); //Get front pt
+            runqueue.pop_front(); //Delete that pt from queue
+            return res;
+        }
+        //Prints the current run queue
+        void printQueue(){
+            deque<process*>::iterator it;
+            cout << "SCHED (" << runqueue.size() << "): ";
+            for (it = runqueue.begin(); it < runqueue.end(); it++){
+                cout << (*it)->pid << ":" << (*it)->state_ts << " ";
+            }
+            cout << '\n';
+        }  
+    protected:
         deque<process*> runqueue; //Process queue
 };
 
 //Constructor are not inherited
-class FCFS : public Scheduler{
+class FCFS : public NotPrioScheduler{
     public:
-        FCFS() : Scheduler(10000, 4) {}
+        FCFS() : NotPrioScheduler(10000) {}
         void add_process(process* p){
             //Adds to end of queue
             runqueue.push_back(p);
@@ -210,9 +216,9 @@ class FCFS : public Scheduler{
         string getSchedName(){ return "FCFS"; }
 };
 
-class LCFS : public Scheduler{
+class LCFS : public NotPrioScheduler{
     public:
-        LCFS() : Scheduler(10000, 4) {}
+        LCFS() : NotPrioScheduler(10000) {}
         void add_process(process* p){
             //Adds to front of queue
             runqueue.push_front(p);
@@ -220,10 +226,11 @@ class LCFS : public Scheduler{
         string getSchedName(){ return "LCFS"; }
 };
 
-class SRTF : public Scheduler{
+class SRTF : public NotPrioScheduler{
     public:
-        SRTF() : Scheduler(10000, 4) {}
+        SRTF() : NotPrioScheduler(10000) {}
         void add_process(process* p){
+            //Adds by shortest remaining time
             deque<process*>::iterator it;
             for (it = runqueue.begin(); it < runqueue.end(); it++){
                if (p->remain_cputime < (*it)->remain_cputime){
@@ -235,9 +242,9 @@ class SRTF : public Scheduler{
         string getSchedName(){ return "SRTF"; }
 };
 
-class RR : public Scheduler{
+class RR : public NotPrioScheduler{
     public:
-        RR(int q) : Scheduler(q, 4) {}
+        RR(int q) : NotPrioScheduler(q) {}
         void add_process(process* p){
             runqueue.push_back(p);
         }
@@ -285,18 +292,16 @@ class PRIO : public Scheduler{
                 activeQ = expireQ;
                 expireQ = temp;
                 if (vFlag) { cout << "switched queues\n"; }
-            } else {
-                return p;
-            }
-            //Try to get a proc again
-            for (int i=maxprio-1; i>-1; i--){
-                if ((*activeQ)[i].empty()) {
-                    continue;
+                //Try to get a proc again
+                for (int i=maxprio-1; i>-1; i--){
+                    if ((*activeQ)[i].empty()) {
+                        continue;
+                    }
+                    p = (*activeQ)[i].front(); 
+                    (*activeQ)[i].pop_front(); 
+                    break;
                 }
-                p = (*activeQ)[i].front(); 
-                (*activeQ)[i].pop_front(); 
-                break;
-            }
+            } 
             return p;
         }
         void printQueue(){ //{ [0][1][2]} : { [][][]} : 
@@ -335,20 +340,14 @@ class PRIO : public Scheduler{
         vector<deque<process*> >* expireQ;
 };
 
-/*class PREPRIO : public Scheduler{
+class PREPRIO : public PRIO{
     public:
-        PREPRIO(int q, int p) : Scheduler(q, p) {}
-        void add_process(process* p){
-
-        }
-        process* get_next_process(){
-            
-        }
+        PREPRIO(int q, int p) : PRIO(q, p) {}
+      
         void test_preempty(process *p, int curtime){
         }
-    private:
 };
-*/
+
 
 //Global var couz im too lazy to make a place to put them
 vector<int> randvals; //Vector containg the random integers
@@ -406,17 +405,17 @@ int main(int argc, char* argv[]) {
                     }
                     myScheduler = new PRIO(quantum,maxprio);
                     break;
-                /*case 'E': //Preempt Priority
+                case 'E': //Preempt Priority
                     if (quantum <= 0) {
                         cerr << "Error: Preempt Priority - Quantum <= 0.\n";
-                        exit(1)
+                        exit(1);
                     }
                     if (maxprio <= 0) {
                         cerr << "Error: Preempt Priority - Max prio <= 0.\n";
-                        exit(1)
+                        exit(1);
                     }
                     myScheduler = new PREPRIO(quantum,maxprio);
-                    break;*/
+                    break;
                 default:
                     cerr << "Error: Invalid Scheduler Name.\n";
                     exit(1);                   
