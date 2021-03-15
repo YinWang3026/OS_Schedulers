@@ -58,13 +58,10 @@ struct process{
     static int count;
     process(int at, int ct, int cb, int io, int p, process_state_t s):
         arrivalTime(at), totalCpuTime(ct), cpuBurst(cb), ioBurst(io),  
-        static_priority(p), state(s), state_ts(at), remain_cputime(ct){
+        static_priority(p), state(s), state_ts(at), remain_cputime(ct),
+        currCb(0), ft(0), tt(0), it(0), cw(0){
             pid = count++;
             dynamic_priority = static_priority - 1;
-            ft = 0;
-            tt = 0;
-            it = 0;
-            cw = 0;
         }
     void printProcess(){
         printf("PID: %d, AT: %d, TC: %d, CB: %d, IO: %d, State: %s, rem: %d, sPri: %d, dPri: %d, ts: %d\n",
@@ -87,6 +84,7 @@ struct process{
 
     int remain_cputime; //total cpu subtract what is done
     int dynamic_priority; //static prio - 1
+    int currCb; //remaing cpu burst after preempt
 
     int ft; //finishing time
     int tt; //turnaround time: at - ft
@@ -501,7 +499,12 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
             //The running state
             case TRANS_TO_RUN: // create event for either preemption or blocking
                 //Generate random cpu brust
-                rcb = myrandom(proc->cpuBurst);
+                if (proc->currCb == 0){ //No remaining cb, generate new
+                    rcb = myrandom(proc->cpuBurst);
+                } else{ //Has remaining cb
+                    rcb = proc->currCb;
+                    proc->currCb = 0; //Clearing remaining cb
+                }
                 if (rcb > proc->remain_cputime){
                     rcb = proc->remain_cputime; //if rcb > remain cpu, reduce to remain cpu
                 }
@@ -528,9 +531,16 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                     etraceEvt(evtList); //Print queue after
                     
                 } else { // Greater than quantum, get preempted
-
+                    rcb = rcb - quantum; //remaining cpu burst
+                    proc->currCb = rcb; //store the remaining burst
+                    proc->remain_cputime -= quantum; //Run for at most quantum
+                    //fire new event at curr time + quantum
+                    evt = new event(proc, currentTime+quantum, TRANS_TO_PREEMPT);
+                    etraceEvtEvtList(evt,evtList); //Print queue before
+                    //Update evtList
+                    evtList->putEvent(evt); //Add evt to qeueue
+                    etraceEvt(evtList); //Print queue after
                 }
-                
                 break;
             //The block state
             case TRANS_TO_BLOCK:
@@ -568,12 +578,15 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                 break;
             //The preempt state, prob not used in FLS
             case TRANS_TO_PREEMPT:
+                vtrace("%d %d %d: %s -> %s cb=%d rem=%d prio=%d\n", currentTime, proc->pid, timeInPrevState, 
+                    state_string[proc->state].c_str(), state_string[STATE_READY].c_str(), 
+                    rcb, proc->remain_cputime, proc->dynamic_priority);
+                proc->state = STATE_READY;
+                proc->state_ts = currentTime;
                 // add to runqueue (no event is generated)
                 myScheduler->add_process(proc); //Adding proc to run queue
-
                 call_scheduler = true;
                 runningProc = NULL;
-
                 break;
 
             case TRANS_TO_DONE:
