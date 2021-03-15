@@ -16,9 +16,9 @@ int eFlag = 0;
 
 //Macro definitions
 #define vtrace(fmt...)  do { if (vFlag) { printf(fmt); fflush(stdout); } } while(0)
-#define etraceEvtEvtList(evt, evtList)  do { if (eFlag){ cout<<" AddEvent("; evt->printEvent(); \
-    cout<<"): "; evtList->printEvents(); cout << "==> "; fflush(stdout); } } while(0)
-#define etraceEvt(evtList)  do { if (eFlag) { evtList->printEvents(); cout << "\n"; fflush(stdout); } }  while(0)
+#define etraceEvtEvtList(evt, evtList)  do { if (eFlag){ printf("  AddEvent(%s): %s==> ", evt->getEventInfo().c_str(), \
+    evtList->getEventsString().c_str()); fflush(stdout); } } while(0)
+#define etraceEvt(evtList)  do { if (eFlag) { printf("%s\n",evtList->getEventsString().c_str()); fflush(stdout); } }  while(0)
 
 //Enum definitions
 enum process_state_t{ 
@@ -101,8 +101,9 @@ struct event{
         evtTimeStamp(ts), evtProcess(p), transition(t){
         evtid = count++;
     }
-    void printEvent(){
-        printf("%d:%d:%s ", evtTimeStamp,evtProcess->pid,trans_string[transition].c_str());
+    string getEventInfo(){
+        return to_string(evtTimeStamp) + ":" + to_string(evtProcess->pid) + ":" + trans_string[transition];
+        //printf("%d:%d:%s ", evtTimeStamp,evtProcess->pid,trans_string[transition].c_str());
     }
     int evtid; //An id
     int evtTimeStamp; //Time to fire this event
@@ -147,11 +148,13 @@ class Events{
         //Find evt by ID and remove it
         void rmEvent(event* evt){
         }
-        void printEvents(){
+        string getEventsString(){
             deque<event*>::iterator it;
+            string s = "";
             for (it = evtqueue.begin(); it < evtqueue.end(); it++){
-                (*it)->printEvent();
+                s += (*it)->getEventInfo() + " ";
             }
+            return s;
         }
     private:
         deque<event*> evtqueue;
@@ -343,12 +346,11 @@ class PREPRIO : public Scheduler{
 
 //Global var couz im too lazy to make a place to put them
 vector<int> randvals; //Vector containg the random integers
-int totalIoUtil; //holds the total IO utilization
 
 //Function prototypes
 void printProcList(vector<process*>&);
 int myrandom(int); //Generates a random number
-void simulation(Events*, Scheduler*);
+void simulation(Events*, Scheduler*, int&);
 
 int main(int argc, char* argv[]) {
     int c;
@@ -464,15 +466,19 @@ int main(int argc, char* argv[]) {
         evtList->putEvent(evt);
     }
     ifile.close(); //Closing file
-    if (vFlag) { printProcList(procList); } //Print the process list
+    
+    if (vFlag) { 
+        printProcList(procList); 
+    } //Print the process list
 
     //Begin simulation
-    simulation(evtList, myScheduler);
+    int totalIoUtil; //Simulation calculates total IO utilization
+    simulation(evtList, myScheduler, totalIoUtil);
 
     //Printing results
     int finishTime = 0; //the largest ft in procs
     double cpuUtil = 0; //Sum up the total cpu time and divide by ft
-    double ioUtil = double(totalIoUtil); //Already calculated
+    double ioUtil = double(totalIoUtil); //Convert to double
     double avgTT = 0; //sum the proc tt and divide by # of procs
     double avgCW = 0; //sum the proc cw and divide by # of procs
     double throughput = 0; //# of procs divide by ft
@@ -516,7 +522,7 @@ void printProcList(vector<process*>& v){
     }
 }
 
-void simulation(Events* evtList, Scheduler* myScheduler){
+void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
     event* evt;
     process* proc;
     process* runningProc;
@@ -526,9 +532,7 @@ void simulation(Events* evtList, Scheduler* myScheduler){
     bool call_scheduler;
 
     if (eFlag){
-        printf("ShowEventQ: ");
-        evtList->printEvents();
-        printf("\n");
+        printf("ShowEventQ: %s\n", evtList->getEventsString().c_str());
     }
     runningProc = NULL; //No proc running
     call_scheduler = false; //Not calling the scheduler
@@ -660,7 +664,7 @@ void simulation(Events* evtList, Scheduler* myScheduler){
             if (runningProc == NULL) { //Currently not running a proc
 
                 if (tFlag) { //Print the run queue
-                    printf("SCHED(%d): ", myScheduler->getQueueSize());
+                    printf("SCHED (%d): ", myScheduler->getQueueSize());
                     myScheduler->printQueue();
                 }
 
