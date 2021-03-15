@@ -19,6 +19,8 @@ int eFlag = 0;
 #define etraceEvtEvtList(evt, evtList)  do { if (eFlag){ printf("  AddEvent(%s): %s==> ", evt->getEventInfo().c_str(), \
     evtList->getEventsString().c_str()); fflush(stdout); } } while(0)
 #define etraceEvt(evtList)  do { if (eFlag) { printf("%s\n",evtList->getEventsString().c_str()); fflush(stdout); } }  while(0)
+#define etraceRmEvt(evt, evtList)  do { if (eFlag){ printf("Remove (%d) %s==> ", futureEvt->evtProcess->pid, \
+    evtList->getEventsString().c_str()); fflush(stdout); } } while(0)
 
 //Enum definitions
 //States
@@ -593,10 +595,7 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                     if (proc->dynamic_priority > runningProc->dynamic_priority){ //can preempt
                         if (futureEvt->evtTimeStamp > currentTime){ //Need to remove evt, and add a new evt
                             vtrace("1 TS=%d, now=%d --> YES\n", futureEvt->evtTimeStamp, currentTime);
-                            if (eFlag) { 
-                                printf("Remove (%d) ", futureEvt->evtProcess->pid);
-                                cout << evtList->getEventsString(); //Print queue before
-                            }
+                            etraceRmEvt(futureEvt,evtList);
                             runningProc->remain_cputime += (futureEvt->evtTimeStamp - currentTime); //refund tbe cpu time
                             runningProc->currCb += futureEvt->evtTimeStamp - currentTime; //refund the burst
                             evtList->rmEvent(futureEvt); //remove the upcoming block/read evt
