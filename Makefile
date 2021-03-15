@@ -1,5 +1,5 @@
 sched: sched.cpp
-	g++ -g -Wall sched.cpp -o sched
+	g++ -std=c++11 -g sched.cpp -o sched
 
 clean:
 	rm -rf sched *~

@@ -557,7 +557,7 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
     process* proc; //Proc in the current event
     process* runningProc; //Proc currently in running state
     process_trans_t evtTransTo;
-    int currentTime, timeInPrevState, ioStart, ioEnd;
+    int currentTime, timeInPrevState, ioEnd;
     int quantum = myScheduler->getQuantum();
     bool call_scheduler;
 
@@ -567,7 +567,6 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
     runningProc = NULL; //No proc running
     call_scheduler = false; //Not calling the scheduler
     totalIoUtil = 0; //IO Utilization counter
-    ioStart = 0; //Start period of current io
     ioEnd = 0; //End period of current io
 
     while((evt = evtList->getEvent())) { //Pop an event from event queue
@@ -577,7 +576,7 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
         currentTime = evt->evtTimeStamp; //When did this evt fire
         timeInPrevState = currentTime - proc->state_ts; //Time spend it previous state
         //Remove current event object from memory
-        delete evt; evt = nullptr;
+        delete evt; evt = NULL;
         
         switch(evtTransTo) {
             //The ready state
@@ -681,12 +680,10 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                 //Calculate the total IO Utilization
                 if (currentTime > ioEnd){ //No overlap
                     totalIoUtil += rio;
-                    ioStart = currentTime;
                     ioEnd = currentTime + rio;
                 } else if (currentTime <= ioEnd && ((currentTime+rio) > ioEnd)){ //Overlap
                     totalIoUtil += ((currentTime + rio) - ioEnd); //Need to take out overlap
                     ioEnd = currentTime + rio;
-                    ioStart = currentTime;
                 } //else, total overlap, just ignore
                 //Ready event at curr time + rio
                 evt = new event(proc, currentTime+rio, TRANS_TO_READY);
