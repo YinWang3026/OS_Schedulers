@@ -164,16 +164,34 @@ class Scheduler {
     public:
         Scheduler(int q, int p) : quantum(q), maxprio(p){}
         virtual ~Scheduler(){}
-        //Each scheduler implements their own virtual funcs
+        //Each scheduler must implement add proc
         virtual void add_process(process*)=0;
-        virtual process* get_next_process()=0;
-        virtual void test_preempty(process*, int)=0;
-        //Prints the current run queue
-        virtual void printQueue()=0;
-        //Returns name of the scheduler
+        //Returns name of the scheduler, must implement
         virtual string getSchedName()=0;
+        //get proc is optional implement
+        virtual process* get_next_process(){
+            if (runqueue.empty()){
+                return NULL;
+            }
+            process* res = runqueue.front(); //Get front pt
+            runqueue.pop_front(); //Delete that pt from queue
+            return res;
+        }
+        //test preempty is optional implement
+        virtual void test_preempty(process*, int){
+            return;
+        }
+        //General functions ...
+        //Prints the current run queue
+        void printQueue(){
+            deque<process*>::iterator it;
+            for (it = runqueue.begin(); it < runqueue.end(); it++){
+                cout << (*it)->pid << ":" << (*it)->state_ts << " ";
+            }
+            cout << '\n';
+        }        
         //Returns the queue size
-        virtual int getQueueSize()=0;
+        int getQueueSize(){ return runqueue.size(); }
         //Returns the quantum
         int getQuantum(){ return quantum; }
         //Returns the maxprio
@@ -181,6 +199,7 @@ class Scheduler {
     protected:
         int quantum;
         int maxprio;
+        deque<process*> runqueue; //Process queue
 };
 
 //Constructor are not inherited
@@ -191,28 +210,7 @@ class FCFS : public Scheduler{
             //Adds to end of queue
             runqueue.push_back(p);
         }
-        process* get_next_process(){
-            if (runqueue.empty()){
-                return NULL;
-            }
-            process* res = runqueue.front(); //Get front pt
-            runqueue.pop_front(); //Delete that pt from queue
-            return res;
-        }
-        void test_preempty(process*, int){
-            return; //FCFS doesn't use this
-        }
-        void printQueue(){
-            deque<process*>::iterator it;
-            for (it = runqueue.begin(); it < runqueue.end(); it++){
-                cout << (*it)->pid << ":" << (*it)->state_ts << " ";
-            }
-            cout << '\n';
-        }
         string getSchedName(){ return "FCFS"; }
-        int getQueueSize(){ return runqueue.size(); }
-    private:
-        deque<process*> runqueue; //Proc queue
 };
 
 class LCFS : public Scheduler{
@@ -222,28 +220,7 @@ class LCFS : public Scheduler{
             //Adds to front of queue
             runqueue.push_front(p);
         }
-        process* get_next_process(){
-            if (runqueue.empty()){
-                return NULL;
-            }
-            process* res = runqueue.front(); //Get front pt
-            runqueue.pop_front(); //Delete that pt from queue
-            return res;
-        }
-        void test_preempty(process*, int){
-            return; //LCFS doesn't use this
-        }
-        void printQueue(){
-            deque<process*>::iterator it;
-            for (it = runqueue.begin(); it < runqueue.end(); it++){
-                cout << (*it)->pid << ":" << (*it)->state_ts << " ";
-            }
-            cout << '\n';
-        }
         string getSchedName(){ return "LCFS"; }
-        int getQueueSize(){ return runqueue.size(); }
-    private:
-        deque<process*> runqueue; //Proc queue
 };
 
 class SRTF : public Scheduler{
@@ -258,28 +235,7 @@ class SRTF : public Scheduler{
             }
             it = runqueue.insert(it,p);
         }
-        process* get_next_process(){
-            if (runqueue.empty()){
-                return NULL;
-            }
-            process* res = runqueue.front(); //Get front pt
-            runqueue.pop_front(); //Delete that pt from queue
-            return res;
-        }
-        void test_preempty(process*, int){
-            return; //SRTF doesn't use this
-        }
-        void printQueue(){
-            deque<process*>::iterator it;
-            for (it = runqueue.begin(); it < runqueue.end(); it++){
-                cout << (*it)->pid << ":" << (*it)->state_ts << " ";
-            }
-            cout << '\n';
-        }
         string getSchedName(){ return "SRTF"; }
-        int getQueueSize(){ return runqueue.size(); }
-    private:
-        deque<process*> runqueue; //Proc queue
 };
 
 class RR : public Scheduler{
@@ -288,29 +244,7 @@ class RR : public Scheduler{
         void add_process(process* p){
             runqueue.push_back(p);
         }
-        process* get_next_process(){
-            if (runqueue.empty()){
-                return NULL;
-            }
-            process* res = runqueue.front(); //Get front pt
-            runqueue.pop_front(); //Delete that pt from queue
-            return res;
-        }
-        void test_preempty(process*, int){
-            return; //SRTF doesn't use this
-        }
-        void printQueue(){
-            deque<process*>::iterator it;
-            for (it = runqueue.begin(); it < runqueue.end(); it++){
-                cout << (*it)->pid << ":" << (*it)->state_ts << " ";
-            }
-            cout << '\n';
-        }
         string getSchedName(){ return "RR " + to_string(quantum); }
-        int getQueueSize(){ return runqueue.size(); }
-    private:
-        deque<process*> runqueue; //Proc queue
-
 };
 
 /*class PRIO : public Scheduler{
