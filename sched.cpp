@@ -145,10 +145,26 @@ class Events{
         }
         //Find evt by ID and remove it
         void rmEvent(event* evt){
+            deque<event*>::iterator it;
+            for (it = evtqueue.begin(); it < evtqueue.end(); it++){
+                if ((*it)->evtid == evt->evtid) {
+                    evtqueue.erase(it);
+                } 
+            }
+        }
+        //Given a pid, find the corresponding evt
+        event* findEvent(process* p){
+            deque<event*>::iterator it;
+            for (it = evtqueue.begin(); it < evtqueue.end(); it++){
+                if ((*it)->evtProcess->pid == p->pid) {
+                    return (*it);
+                } 
+            }
+            return NULL;
         }
         string getEventsString(){
-            deque<event*>::iterator it;
             string s = "";
+            deque<event*>::iterator it;
             for (it = evtqueue.begin(); it < evtqueue.end(); it++){
                 s += (*it)->getEventInfo() + " ";
             }
@@ -171,7 +187,7 @@ class Scheduler {
         //get proc is optional implement
         virtual process* get_next_process()=0;
         //test preempty is optional implement, no pure virtual
-        virtual void test_preempty(process*, int){}
+        virtual bool test_preempty(){ return false; }
         //Returns the quantum
         int getQuantum(){ return quantum; }
         //Returns the maxprio
@@ -343,13 +359,13 @@ class PRIO : public Scheduler{
 class PREPRIO : public PRIO{
     public:
         PREPRIO(int q, int p) : PRIO(q, p) {}
-      
-        void test_preempty(process *p, int curtime){
+        bool test_preempty(){
+            return true;
         }
+        string getSchedName(){ return "PREPRIO " + to_string(quantum); }
 };
 
-
-//Global var couz im too lazy to make a place to put them
+//Global var
 vector<int> randvals; //Vector containg the random integers
 
 //Function prototypes
@@ -532,15 +548,16 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
     process* proc;
     process* runningProc;
     process_trans_t evtTransTo;
-    int currentTime, timeInPrevState, rcb, rio, ioStart, ioEnd;
+    int currentTime, timeInPrevState, ioStart, ioEnd;
     int quantum = myScheduler->getQuantum();
-    bool call_scheduler;
+    bool call_scheduler, preprio_preempt;
 
     if (eFlag){
         printf("ShowEventQ: %s\n", evtList->getEventsString().c_str());
     }
     runningProc = NULL; //No proc running
     call_scheduler = false; //Not calling the scheduler
+    preprio_preempt = false;
     totalIoUtil = 0;
     ioStart = 0; //Start period of current io
     ioEnd = 0; //End period of current io
@@ -563,6 +580,39 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                 //Update proc
                 proc->state = STATE_READY; //Update proc state
                 proc->state_ts = currentTime; //Update proc state_ts, aka now
+                
+                //Preprio Preemption
+                //Is my dynamic prio > currproc prio
+                //does the current proc prio have an event at this time? couz if it does i aint gotta do anything
+                //if preemption does happen, currently running pro's future event is removed, and a prempt event is added
+                //
+                if (runningProc != NULL && myScheduler->test_preempty())
+                {
+                    vtrace("---> PRIO preemption %d by %d ? ",runningProc->pid,proc->pid);
+                    evt = evtList->findEvent(runningProc); //get the upcoming evt
+                    //printf("Pid: %d, prio: %d ---- runPid: %d, runprio: %d\n", proc->pid, proc->dynamic_priority, runningProc->pid, runningProc->dynamic_priority);
+                    if (proc->dynamic_priority > runningProc->dynamic_priority){ //can preempt
+                        if (evt->evtTimeStamp != currentTime){ //Need to remove evt, and add a new evt
+                            vtrace("1 TS=%d, now=%d --> YES\n", evt->evtTimeStamp, currentTime);
+                            if (eFlag) { 
+                                printf("Remove (%d)", evt->evtProcess->pid);
+                                cout << evtList->getEventsString(); //Print queue before
+                            }
+                            runningProc->remain_cputime += (evt->evtTimeStamp - currentTime+1); //refund tbe cpu time
+                            runningProc->currCb = evt->evtTimeStamp - currentTime+1;
+                            evtList->rmEvent(evt); //remove the upcoming block/read evt
+                            etraceEvt(evtList); //Print queue before
+                            evt = new event(runningProc, currentTime, TRANS_TO_PREEMPT); //Make new event
+                            etraceEvtEvtList(evt,evtList); //Print queue before
+                            evtList->putEvent(evt); //Add evt to qeueue
+                            etraceEvt(evtList); //Print queue after
+                        } else{
+                            vtrace("1 TS=%d, now=%d --> NO\n", evt->evtTimeStamp, currentTime);
+                        }
+                    } else{
+                        vtrace("0 TS=%d, now=%d --> NO\n", evt->evtTimeStamp, currentTime);
+                    }
+                } 
                 //Adding proc to run queue
                 myScheduler->add_process(proc); 
                 call_scheduler = true;
@@ -572,6 +622,7 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
             //The running state
             case TRANS_TO_RUN: // create event for either preemption or blocking
                 //Generate random cpu brust
+                int rcb;
                 if (proc->currCb == 0){ //No remaining cb, generate new
                     rcb = myrandom(proc->cpuBurst);
                 } else{ //Has remaining cb
@@ -618,6 +669,7 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
             //The block state
             case TRANS_TO_BLOCK:
                 //Generate random io brust
+                int rio;
                 rio = myrandom(proc->ioBurst);
                 //Print info
                 vtrace("%d %d %d: %s -> %s ib=%d rem=%d\n", currentTime, proc->pid, timeInPrevState, 
@@ -652,7 +704,7 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
             case TRANS_TO_PREEMPT:
                 vtrace("%d %d %d: %s -> %s cb=%d rem=%d prio=%d\n", currentTime, proc->pid, timeInPrevState, 
                     state_string[proc->state].c_str(), state_string[STATE_READY].c_str(), 
-                    rcb, proc->remain_cputime, proc->dynamic_priority);
+                    proc->currCb, proc->remain_cputime, proc->dynamic_priority);
                 //Update proc
                 proc->state = STATE_READY;
                 proc->state_ts = currentTime;
