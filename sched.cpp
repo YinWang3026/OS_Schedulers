@@ -589,28 +589,28 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                 if (runningProc != NULL && myScheduler->test_preempty())
                 {
                     vtrace("---> PRIO preemption %d by %d ? ",runningProc->pid,proc->pid);
-                    evt = evtList->findEvent(runningProc); //get the upcoming evt
+                    event* futureEvt = evtList->findEvent(runningProc); //get the upcoming evt
                     //printf("Pid: %d, prio: %d ---- runPid: %d, runprio: %d\n", proc->pid, proc->dynamic_priority, runningProc->pid, runningProc->dynamic_priority);
                     if (proc->dynamic_priority > runningProc->dynamic_priority){ //can preempt
-                        if (evt->evtTimeStamp != currentTime){ //Need to remove evt, and add a new evt
-                            vtrace("1 TS=%d, now=%d --> YES\n", evt->evtTimeStamp, currentTime);
+                        if (futureEvt->evtTimeStamp > currentTime){ //Need to remove evt, and add a new evt
+                            vtrace("1 TS=%d, now=%d --> YES\n", futureEvt->evtTimeStamp, currentTime);
                             if (eFlag) { 
-                                printf("Remove (%d)", evt->evtProcess->pid);
+                                printf("Remove (%d)", futureEvt->evtProcess->pid);
                                 cout << evtList->getEventsString(); //Print queue before
                             }
-                            runningProc->remain_cputime += (evt->evtTimeStamp - currentTime+1); //refund tbe cpu time
-                            runningProc->currCb = evt->evtTimeStamp - currentTime+1;
-                            evtList->rmEvent(evt); //remove the upcoming block/read evt
+                            runningProc->remain_cputime += (futureEvt->evtTimeStamp - currentTime); //refund tbe cpu time
+                            runningProc->currCb += futureEvt->evtTimeStamp - currentTime; //refund the burst
+                            evtList->rmEvent(futureEvt); //remove the upcoming block/read evt
                             etraceEvt(evtList); //Print queue before
                             evt = new event(runningProc, currentTime, TRANS_TO_PREEMPT); //Make new event
                             etraceEvtEvtList(evt,evtList); //Print queue before
                             evtList->putEvent(evt); //Add evt to qeueue
                             etraceEvt(evtList); //Print queue after
                         } else{
-                            vtrace("1 TS=%d, now=%d --> NO\n", evt->evtTimeStamp, currentTime);
+                            vtrace("1 TS=%d, now=%d --> NO\n", futureEvt->evtTimeStamp, currentTime);
                         }
                     } else{
-                        vtrace("0 TS=%d, now=%d --> NO\n", evt->evtTimeStamp, currentTime);
+                        vtrace("0 TS=%d, now=%d --> NO\n", futureEvt->evtTimeStamp, currentTime);
                     }
                 } 
                 //Adding proc to run queue
