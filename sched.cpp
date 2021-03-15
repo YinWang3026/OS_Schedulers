@@ -160,22 +160,19 @@ class Events{
 
 class Scheduler {
     public:
-        Scheduler(int q, int p) : quantum(q), maxprio(p), 
-            runqueue(new deque<process*>()){}
-        virtual ~Scheduler(){
-            delete runqueue;
-        }
+        Scheduler(int q, int p) : quantum(q), maxprio(p){}
+        virtual ~Scheduler(){}
         //Each scheduler must implement add proc
         virtual void add_process(process*)=0;
         //Returns name of the scheduler, must implement
         virtual string getSchedName()=0;
         //get proc is optional implement
         virtual process* get_next_process(){
-            if (runqueue->empty()){
+            if (runqueue.empty()){
                 return NULL;
             }
-            process* res = runqueue->front(); //Get front pt
-            runqueue->pop_front(); //Delete that pt from queue
+            process* res = runqueue.front(); //Get front pt
+            runqueue.pop_front(); //Delete that pt from queue
             return res;
         }
         //test preempty is optional implement
@@ -186,13 +183,12 @@ class Scheduler {
         //Prints the current run queue
         virtual void printQueue(){
             deque<process*>::iterator it;
-            for (it = runqueue->begin(); it < runqueue->end(); it++){
+            cout << "SCHED (" << runqueue.size() << "): ";
+            for (it = runqueue.begin(); it < runqueue.end(); it++){
                 cout << (*it)->pid << ":" << (*it)->state_ts << " ";
             }
             cout << '\n';
         }        
-        //Returns the queue size
-        int getQueueSize(){ return runqueue->size(); }
         //Returns the quantum
         int getQuantum(){ return quantum; }
         //Returns the maxprio
@@ -200,7 +196,7 @@ class Scheduler {
     protected:
         int quantum;
         int maxprio;
-        deque<process*>* runqueue; //Process queue
+        deque<process*> runqueue; //Process queue
 };
 
 //Constructor are not inherited
@@ -209,7 +205,7 @@ class FCFS : public Scheduler{
         FCFS() : Scheduler(10000, 4) {}
         void add_process(process* p){
             //Adds to end of queue
-            runqueue->push_back(p);
+            runqueue.push_back(p);
         }
         string getSchedName(){ return "FCFS"; }
 };
@@ -219,7 +215,7 @@ class LCFS : public Scheduler{
         LCFS() : Scheduler(10000, 4) {}
         void add_process(process* p){
             //Adds to front of queue
-            runqueue->push_front(p);
+            runqueue.push_front(p);
         }
         string getSchedName(){ return "LCFS"; }
 };
@@ -229,12 +225,12 @@ class SRTF : public Scheduler{
         SRTF() : Scheduler(10000, 4) {}
         void add_process(process* p){
             deque<process*>::iterator it;
-            for (it = runqueue->begin(); it < runqueue->end(); it++){
+            for (it = runqueue.begin(); it < runqueue.end(); it++){
                if (p->remain_cputime < (*it)->remain_cputime){
                     break;
                 }
             }
-            it = runqueue->insert(it,p);
+            it = runqueue.insert(it,p);
         }
         string getSchedName(){ return "SRTF"; }
 };
@@ -243,7 +239,7 @@ class RR : public Scheduler{
     public:
         RR(int q) : Scheduler(q, 4) {}
         void add_process(process* p){
-            runqueue->push_back(p);
+            runqueue.push_back(p);
         }
         string getSchedName(){ return "RR " + to_string(quantum); }
 };
@@ -251,31 +247,92 @@ class RR : public Scheduler{
 class PRIO : public Scheduler{
     public:
         PRIO(int q, int p) : Scheduler(q, p),
-            expqueue(new deque<process*>()) {}
+            activeQ(new vector<deque<process*> >),
+            expireQ(new vector<deque<process*> >){
+                for (int i = 0; i < maxprio; i++){ //0 1 2 3, -1 goes to expire q
+                    activeQ->push_back(deque<process*>());
+                    expireQ->push_back(deque<process*>());
+                }
+            }
         ~PRIO(){
-            delete expqueue;
-            delete runqueue;
+            delete activeQ;
+            delete expireQ;
         }
         void add_process(process* p){
             if (p->dynamic_priority == -1) { // reset dynamic priority on -1
                 p->dynamic_priority = p->static_priority - 1;
-                add_to_expqueue(p);
+                int index = p->dynamic_priority;
+                (*expireQ)[index].push_back(p);
+            } else{
+                //Active queue
+                int index = p->dynamic_priority;
+                (*activeQ)[index].push_back(p);
             }
         }
         process* get_next_process(){
             //get from active, if empty, swap active and expqueue pointers
+            process* p = NULL;
+            for (int i=maxprio-1; i>-1; i--){
+                if ((*activeQ)[i].empty()) {
+                    continue; //Nothing in this queue, go next
+                }
+                p = (*activeQ)[i].front(); //First item in the non empty queue
+                (*activeQ)[i].pop_front(); //Delete that pt from queue
+                break; //Got the proc, no need to look further
+            }
+            if (p == NULL){ //Nothing was read from activeQ, it must be empty
+                vector<deque<process*> >* temp = activeQ; //swap pointers
+                activeQ = expireQ;
+                expireQ = temp;
+                cout << "switched queues\n";
+            } else {
+                return p;
+            }
+            //Try to get a proc again
+            for (int i=maxprio-1; i>-1; i--){
+                if ((*activeQ)[i].empty()) {
+                    continue;
+                }
+                p = (*activeQ)[i].front(); 
+                (*activeQ)[i].pop_front(); 
+                break;
+            }
+            return p;
         }
-
-        void add_to_expqueue(process* p){
-
+        void printQueue(){ //{ [0][1][2]} : { [][][]} : 
+            deque<process*>::iterator it;
+            cout << "{ ";
+            for (int i=maxprio-1; i>-1; i--){
+                if ((*activeQ)[i].empty()) {
+                    cout << "[]";
+                    continue; //Nothing in this queue, go next
+                }
+                cout << "[";
+                for (it = (*activeQ)[i].begin(); it < (*activeQ)[i].end(); it++){
+                    cout << (*it)->pid << ",";
+                }
+                cout << "]";
+              
+            }
+            cout << "} : { ";
+            for (int i=maxprio-1; i>-1; i--){
+                if ((*expireQ)[i].empty()) {
+                    cout << "[]";
+                    continue; //Nothing in this queue, go next
+                }
+                cout << "[";
+                for (it = (*expireQ)[i].begin(); it < (*expireQ)[i].end(); it++){
+                    cout << (*it)->pid << ",";
+                }
+                cout << "]";
+              
+            }
+            cout << "}\n";
         }
-  
-        
         string getSchedName(){ return "PRIO " + to_string(quantum); }
-
     private:
-        vector<deque<process*>>* activeQ;
-        vector<deque<process*>>* activeQ;
+        vector<deque<process*> >* activeQ; //pointer to a vector, that holds pointers to deque<process*> pointers
+        vector<deque<process*> >* expireQ;
 };
 
 /*class PREPRIO : public Scheduler{
@@ -597,6 +654,7 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                 vtrace("%d %d %d: %s -> %s cb=%d rem=%d prio=%d\n", currentTime, proc->pid, timeInPrevState, 
                     state_string[proc->state].c_str(), state_string[STATE_READY].c_str(), 
                     rcb, proc->remain_cputime, proc->dynamic_priority);
+                //Update proc
                 proc->state = STATE_READY;
                 proc->state_ts = currentTime;
                 proc->dynamic_priority -= 1; //Each preemption decreases dynamic priority by 1
@@ -628,7 +686,6 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
             if (runningProc == NULL) { //Currently not running a proc
 
                 if (tFlag) { //Print the run queue
-                    printf("SCHED (%d): ", myScheduler->getQueueSize());
                     myScheduler->printQueue();
                 }
 
