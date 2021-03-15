@@ -21,6 +21,7 @@ int eFlag = 0;
 #define etraceEvt(evtList)  do { if (eFlag) { printf("%s\n",evtList->getEventsString().c_str()); fflush(stdout); } }  while(0)
 
 //Enum definitions
+//States
 enum process_state_t{ 
     STATE_CREATED,
     STATE_READY,
@@ -28,24 +29,24 @@ enum process_state_t{
     STATE_BLOCKED,
     STATE_DONE
 };
-
-string state_string[] = { //Print the state
+//String of process_state
+string state_string[] = {
     "CREATED",
     "READY",
     "RUNNG",
     "BLOCK",
     "DONE"
 };
-
+//Transitions
 enum process_trans_t{
     TRANS_TO_RUN, //Ready -> Run
     TRANS_TO_READY, //Run -> Ready, Block -> Ready
     TRANS_TO_BLOCK, //Running -> Block
     TRANS_TO_PREEMPT, //Create -> Ready
-    TRANS_TO_DONE
+    TRANS_TO_DONE //run -> done
 };
-
-string trans_string[] = { //Print the state
+//String of process_trans
+string trans_string[] = {
     "RUNNG",
     "READY",
     "BLOCK",
@@ -63,11 +64,13 @@ struct process{
             pid = count++;
             dynamic_priority = static_priority - 1;
         }
+    //Prints the process info, for debugging
     void printProcess(){
         printf("PID: %d, AT: %d, TC: %d, CB: %d, IO: %d, State: %s, rem: %d, sPri: %d, dPri: %d, ts: %d\n",
         pid,arrivalTime,totalCpuTime,cpuBurst,ioBurst,state_string[state].c_str(),remain_cputime,
         static_priority,dynamic_priority,state_ts);
     }
+    //Summary
     void printResult(){
         printf("%04d: %4d %4d %4d %4d %1d | %5d %5d %5d %5d\n",pid, arrivalTime, totalCpuTime, cpuBurst, ioBurst, static_priority,
             ft, tt, it, cw);
@@ -99,6 +102,7 @@ struct event{
         evtTimeStamp(ts), evtProcess(p), transition(t){
         evtid = count++;
     }
+    //String of the event
     string getEventInfo(){
         return to_string(evtTimeStamp) + ":" + to_string(evtProcess->pid) + ":" + trans_string[transition];
         //printf("%d:%d:%s ", evtTimeStamp,evtProcess->pid,trans_string[transition].c_str());
@@ -152,7 +156,7 @@ class Events{
                 } 
             }
         }
-        //Given a pid, find the corresponding evt
+        //Given a pid, find the first evt that holds the pid
         event* findEvent(process* p){
             deque<event*>::iterator it;
             for (it = evtqueue.begin(); it < evtqueue.end(); it++){
@@ -162,6 +166,7 @@ class Events{
             }
             return NULL;
         }
+        //Returns a string of all the events
         string getEventsString(){
             string s = "";
             deque<event*>::iterator it;
@@ -196,29 +201,29 @@ class Scheduler {
         int quantum;
         int maxprio;
 };
-
+//Class for FLS and RR
 class NotPrioScheduler : public Scheduler{
     public:
         NotPrioScheduler(int q) : Scheduler(q,4){}
         process* get_next_process(){
-            if (runqueue.empty()){
+            if (readyqueue.empty()){
                 return NULL;
             }
-            process* res = runqueue.front(); //Get front pt
-            runqueue.pop_front(); //Delete that pt from queue
+            process* res = readyqueue.front(); //Get front pt
+            readyqueue.pop_front(); //Delete that pt from queue
             return res;
         }
         //Prints the current run queue
         void printQueue(){
             deque<process*>::iterator it;
-            cout << "SCHED (" << runqueue.size() << "): ";
-            for (it = runqueue.begin(); it < runqueue.end(); it++){
+            cout << "SCHED (" << readyqueue.size() << "): ";
+            for (it = readyqueue.begin(); it < readyqueue.end(); it++){
                 cout << (*it)->pid << ":" << (*it)->state_ts << " ";
             }
             cout << '\n';
         }  
     protected:
-        deque<process*> runqueue; //Process queue
+        deque<process*> readyqueue; //Process queue
 };
 
 //Constructor are not inherited
@@ -227,7 +232,7 @@ class FCFS : public NotPrioScheduler{
         FCFS() : NotPrioScheduler(10000) {}
         void add_process(process* p){
             //Adds to end of queue
-            runqueue.push_back(p);
+            readyqueue.push_back(p);
         }
         string getSchedName(){ return "FCFS"; }
 };
@@ -237,7 +242,7 @@ class LCFS : public NotPrioScheduler{
         LCFS() : NotPrioScheduler(10000) {}
         void add_process(process* p){
             //Adds to front of queue
-            runqueue.push_front(p);
+            readyqueue.push_front(p);
         }
         string getSchedName(){ return "LCFS"; }
 };
@@ -248,12 +253,12 @@ class SRTF : public NotPrioScheduler{
         void add_process(process* p){
             //Adds by shortest remaining time
             deque<process*>::iterator it;
-            for (it = runqueue.begin(); it < runqueue.end(); it++){
+            for (it = readyqueue.begin(); it < readyqueue.end(); it++){
                if (p->remain_cputime < (*it)->remain_cputime){
                     break;
                 }
             }
-            it = runqueue.insert(it,p);
+            it = readyqueue.insert(it,p);
         }
         string getSchedName(){ return "SRTF"; }
 };
@@ -262,7 +267,7 @@ class RR : public NotPrioScheduler{
     public:
         RR(int q) : NotPrioScheduler(q) {}
         void add_process(process* p){
-            runqueue.push_back(p);
+            readyqueue.push_back(p); //Add to end of queue
         }
         string getSchedName(){ return "RR " + to_string(quantum); }
 };
@@ -272,20 +277,23 @@ class PRIO : public Scheduler{
         PRIO(int q, int p) : Scheduler(q, p),
             activeQ(new vector<deque<process*> >),
             expireQ(new vector<deque<process*> >){
+                //Creating the queues
                 for (int i = 0; i < maxprio; i++){ //0 1 2 3, -1 goes to expire q
                     activeQ->push_back(deque<process*>());
                     expireQ->push_back(deque<process*>());
                 }
             }
         ~PRIO(){
+            //Clean up
             delete activeQ;
             delete expireQ;
         }
         void add_process(process* p){
+            //Add proc to queue based on its priority
             if (p->dynamic_priority == -1) { // reset dynamic priority on -1
                 p->dynamic_priority = p->static_priority - 1;
                 int index = p->dynamic_priority;
-                (*expireQ)[index].push_back(p);
+                (*expireQ)[index].push_back(p); //Expire queue
             } else{
                 //Active queue
                 int index = p->dynamic_priority;
@@ -293,9 +301,9 @@ class PRIO : public Scheduler{
             }
         }
         process* get_next_process(){
-            //get from active, if empty, swap active and expqueue pointers
+            //get from active, if empty, swap active and exp queue pointers
             process* p = NULL;
-            for (int i=maxprio-1; i>-1; i--){
+            for (int i=maxprio-1; i>-1; i--){ //index go from large (higher prio) to small
                 if ((*activeQ)[i].empty()) {
                     continue; //Nothing in this queue, go next
                 }
@@ -325,43 +333,41 @@ class PRIO : public Scheduler{
             cout << "{ ";
             for (int i=maxprio-1; i>-1; i--){
                 if ((*activeQ)[i].empty()) {
-                    cout << "[]";
-                    continue; //Nothing in this queue, go next
+                    cout << "[]"; //Empty
+                } else {
+                    cout << "[";
+                    for (it = (*activeQ)[i].begin(); it < (*activeQ)[i].end(); it++){
+                        cout << (*it)->pid << ",";
+                    }
+                    cout << "]";
                 }
-                cout << "[";
-                for (it = (*activeQ)[i].begin(); it < (*activeQ)[i].end(); it++){
-                    cout << (*it)->pid << ",";
-                }
-                cout << "]";
-              
             }
             cout << "} : { ";
             for (int i=maxprio-1; i>-1; i--){
                 if ((*expireQ)[i].empty()) {
                     cout << "[]";
-                    continue; //Nothing in this queue, go next
-                }
-                cout << "[";
-                for (it = (*expireQ)[i].begin(); it < (*expireQ)[i].end(); it++){
-                    cout << (*it)->pid << ",";
-                }
-                cout << "]";
-              
+                } else {
+                    cout << "[";
+                    for (it = (*expireQ)[i].begin(); it < (*expireQ)[i].end(); it++){
+                        cout << (*it)->pid << ",";
+                    }
+                    cout << "]";
+                }       
             }
             cout << "}\n";
         }
         string getSchedName(){ return "PRIO " + to_string(quantum); }
     private:
-        vector<deque<process*> >* activeQ; //pointer to a vector, that holds pointers to deque<process*> pointers
+        vector<deque<process*> >* activeQ; //pointer to a vector, that holds pointers to deque<process*> objects
         vector<deque<process*> >* expireQ;
 };
 
-class PREPRIO : public PRIO{
+class PREPRIO : public PRIO{ //Inherits from PRIO
     public:
         PREPRIO(int q, int p) : PRIO(q, p) {}
-        bool test_preempty(){
-            return true;
-        }
+        bool test_preempty(){ return true; } 
+        //Not sure how to work with the logic of this function
+        //So I just used this function as a way to tell simulator that the proc wants to preempt
         string getSchedName(){ return "PREPRIO " + to_string(quantum); }
 };
 
@@ -369,7 +375,7 @@ class PREPRIO : public PRIO{
 vector<int> randvals; //Vector containg the random integers
 
 //Function prototypes
-void printProcList(vector<process*>&);
+void printProcList(vector<process*>&); //Prints a vector of procs
 int myrandom(int); //Generates a random number
 void simulation(Events*, Scheduler*, int&);
 
@@ -378,6 +384,7 @@ int main(int argc, char* argv[]) {
     Scheduler* myScheduler; //Scheduler for the simulator
     while ((c = getopt(argc,argv,"vtes:")) != -1 )
     {
+        //Argument parsing
         switch(c) {
         case 'v': 
             vFlag = 1;
@@ -411,7 +418,7 @@ int main(int argc, char* argv[]) {
                     myScheduler = new RR(quantum);
                     break;
                 case 'P': //Priority
-                    if (quantum <= 0) {
+                    if (quantum <= 0) { //Basic error checking
                         cerr << "Error: Priority - Quantum <= 0.\n";
                         exit(1);
                     }
@@ -448,7 +455,6 @@ int main(int argc, char* argv[]) {
         cerr << "Missing input file and rfile\n";
         exit(1);
     }
-
     //Gettng file names
     char* inputFile = argv[optind];
     char* randomFile = argv[optind+1];
@@ -473,24 +479,24 @@ int main(int argc, char* argv[]) {
         cerr << "Could not open the input file.\n";
         exit(1);
     }
-    process* p;
-    event* evt;
-    int at, tc, cb, io, prio;
+    process* p; //Process pointer
+    event* evt; //Event pointer
+    int at, tc, cb, io, prio; //File contents
     vector<process*> procList; //Vector holding all created procs
     Events* evtList = new Events(); //Linked list holding all events
 
     while (ifile >> at >> tc >> cb >> io) {
         prio = myrandom(myScheduler->getMaxprio());
-        p = new process(at,tc,cb,io, prio, STATE_CREATED);
-        evt = new event(p, at, TRANS_TO_READY);
+        p = new process(at,tc,cb,io, prio, STATE_CREATED); //Proc
+        evt = new event(p, at, TRANS_TO_READY); //Event
         procList.push_back(p);
         evtList->putEvent(evt);
     }
     ifile.close(); //Closing file
     
     if (vFlag) { 
-        printProcList(procList); 
-    } //Print the process list
+        printProcList(procList); //Print the process list
+    } 
 
     //Begin simulation
     int totalIoUtil; //Simulation calculates total IO utilization
@@ -511,9 +517,10 @@ int main(int argc, char* argv[]) {
         cpuUtil += p->totalCpuTime;
         avgTT += p->tt;
         avgCW += p->cw;
-        p->printResult();
-        delete p; //Pointer to proc is not needed anymore
+        p->printResult(); //Proc summary
+        delete p; //Proc not needed anymore, removing
     }
+    //Calculating total summary
     double dFinishTime = double(finishTime);
     cpuUtil = (cpuUtil/dFinishTime)*100;
     ioUtil = (ioUtil/dFinishTime)*100;
@@ -545,20 +552,19 @@ void printProcList(vector<process*>& v){
 
 void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
     event* evt;
-    process* proc;
-    process* runningProc;
+    process* proc; //Proc in the current event
+    process* runningProc; //Proc currently in running state
     process_trans_t evtTransTo;
     int currentTime, timeInPrevState, ioStart, ioEnd;
     int quantum = myScheduler->getQuantum();
-    bool call_scheduler, preprio_preempt;
+    bool call_scheduler;
 
     if (eFlag){
         printf("ShowEventQ: %s\n", evtList->getEventsString().c_str());
     }
     runningProc = NULL; //No proc running
     call_scheduler = false; //Not calling the scheduler
-    preprio_preempt = false;
-    totalIoUtil = 0;
+    totalIoUtil = 0; //IO Utilization counter
     ioStart = 0; //Start period of current io
     ioEnd = 0; //End period of current io
 
@@ -580,38 +586,32 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                 //Update proc
                 proc->state = STATE_READY; //Update proc state
                 proc->state_ts = currentTime; //Update proc state_ts, aka now
-                
-                //Preprio Preemption
-                //Is my dynamic prio > currproc prio
-                //does the current proc prio have an event at this time? couz if it does i aint gotta do anything
-                //if preemption does happen, currently running pro's future event is removed, and a prempt event is added
-                //
-                if (runningProc != NULL && myScheduler->test_preempty())
-                {
+                //PREPRIO Preemption
+                if (runningProc != NULL && myScheduler->test_preempty()) {
                     vtrace("---> PRIO preemption %d by %d ? ",runningProc->pid,proc->pid);
                     event* futureEvt = evtList->findEvent(runningProc); //get the upcoming evt
-                    //printf("Pid: %d, prio: %d ---- runPid: %d, runprio: %d\n", proc->pid, proc->dynamic_priority, runningProc->pid, runningProc->dynamic_priority);
                     if (proc->dynamic_priority > runningProc->dynamic_priority){ //can preempt
                         if (futureEvt->evtTimeStamp > currentTime){ //Need to remove evt, and add a new evt
                             vtrace("1 TS=%d, now=%d --> YES\n", futureEvt->evtTimeStamp, currentTime);
                             if (eFlag) { 
-                                printf("Remove (%d)", futureEvt->evtProcess->pid);
+                                printf("Remove (%d) ", futureEvt->evtProcess->pid);
                                 cout << evtList->getEventsString(); //Print queue before
                             }
                             runningProc->remain_cputime += (futureEvt->evtTimeStamp - currentTime); //refund tbe cpu time
                             runningProc->currCb += futureEvt->evtTimeStamp - currentTime; //refund the burst
                             evtList->rmEvent(futureEvt); //remove the upcoming block/read evt
-                            etraceEvt(evtList); //Print queue before
-                            evt = new event(runningProc, currentTime, TRANS_TO_PREEMPT); //Make new event
+                            etraceEvt(evtList); //Print queue after removal
+                            evt = new event(runningProc, currentTime, TRANS_TO_PREEMPT); //Make new preempt event
                             etraceEvtEvtList(evt,evtList); //Print queue before
                             evtList->putEvent(evt); //Add evt to qeueue
                             etraceEvt(evtList); //Print queue after
-                        } else{
+                        } else{ //No preemption, let the proc finish itself
                             vtrace("1 TS=%d, now=%d --> NO\n", futureEvt->evtTimeStamp, currentTime);
                         }
-                    } else{
+                    } else{ //Can't preempt
                         vtrace("0 TS=%d, now=%d --> NO\n", futureEvt->evtTimeStamp, currentTime);
                     }
+                    futureEvt = NULL; //Clean up
                 } 
                 //Adding proc to run queue
                 myScheduler->add_process(proc); 
@@ -668,8 +668,7 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                 break;
             //The block state
             case TRANS_TO_BLOCK:
-                //Generate random io brust
-                int rio;
+                int rio; //Generate random io brust
                 rio = myrandom(proc->ioBurst);
                 //Print info
                 vtrace("%d %d %d: %s -> %s ib=%d rem=%d\n", currentTime, proc->pid, timeInPrevState, 
@@ -690,7 +689,7 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                     ioEnd = currentTime + rio;
                     ioStart = currentTime;
                 } //else, total overlap, just ignore
-                //fire new event at curr time + rio
+                //Ready event at curr time + rio
                 evt = new event(proc, currentTime+rio, TRANS_TO_READY);
                 etraceEvtEvtList(evt,evtList); //Print queue before
                 //Update evtList
@@ -711,6 +710,7 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                 proc->dynamic_priority -= 1; //Each preemption decreases dynamic priority by 1
                 // add to runqueue (no event is generated)
                 myScheduler->add_process(proc); //Adding proc to run queue
+                //Current proc just got preempted, need a new proc to run
                 call_scheduler = true;
                 runningProc = NULL;
                 break;
@@ -719,12 +719,12 @@ void simulation(Events* evtList, Scheduler* myScheduler, int& totalIoUtil){
                 vtrace("%d %d %d: %s -> %s rem=%d prio=%d\n", currentTime, proc->pid, timeInPrevState, 
                     state_string[proc->state].c_str(), state_string[STATE_DONE].c_str(), 
                     proc->remain_cputime, proc->dynamic_priority);
-
+                //Update proc info
                 proc->state = STATE_DONE; //Update proc state
                 proc->state_ts = currentTime; //Update proc state_ts, aka now
                 proc->ft = currentTime; //Finishing time
                 proc->tt = currentTime - proc->arrivalTime; //Turn around time
-                //Proc is finished, nothing running call scheudler
+                //Proc is finished, need a new proc to run
                 call_scheduler = true;
                 runningProc = NULL;
                 break;
