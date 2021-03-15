@@ -493,12 +493,12 @@ int main(int argc, char* argv[]) {
         p->printResult();
         delete p; //Pointer to proc is not needed anymore
     }
-    finishTime = double(finishTime);
-    cpuUtil = (cpuUtil/finishTime)*100;
-    ioUtil = (ioUtil/finishTime)*100;
+    double dFinishTime = double(finishTime);
+    cpuUtil = (cpuUtil/dFinishTime)*100;
+    ioUtil = (ioUtil/dFinishTime)*100;
     avgTT /= numProcs;
     avgCW /= numProcs;
-    throughput = (numProcs/finishTime)*100;
+    throughput = (numProcs/dFinishTime)*100;
     printf("SUM: %d %.2lf %.2lf %.2lf %.2lf %.3lf\n", finishTime, cpuUtil, ioUtil, avgTT, avgCW, throughput);
 
     //Clean up
