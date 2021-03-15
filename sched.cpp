@@ -284,7 +284,7 @@ class PRIO : public Scheduler{
                 vector<deque<process*> >* temp = activeQ; //swap pointers
                 activeQ = expireQ;
                 expireQ = temp;
-                cout << "switched queues\n";
+                if (vFlag) { cout << "switched queues\n"; }
             } else {
                 return p;
             }
